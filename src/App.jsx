@@ -53,6 +53,7 @@ export default function App() {
     const updateAttribute = (i, val) => canvasRef.current?.updateAttributeOfSelected(i, val)
     const removeAttribute = (i)    => canvasRef.current?.removeAttributeOfSelected(i)
 const deleteSelected = () => canvasRef.current?.deleteSelected()
+const updateMultiplicity = (i, val) => canvasRef.current?.updateMultiplicity(i, val)
 
   // 👇 el return DEBE estar aquí dentro
   return (
@@ -75,6 +76,7 @@ const deleteSelected = () => canvasRef.current?.deleteSelected()
   onUpdateAttribute={updateAttribute}
   onRemoveAttribute={removeAttribute}
   onDeleteSelected={deleteSelected}
+  onUpdateMultiplicity={updateMultiplicity}
   selectedMeta={selectedMeta}
 />
 

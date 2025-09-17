@@ -8,14 +8,19 @@ export default function Sidebar({
   onUpdateAttribute,
   onRemoveAttribute,
   onDeleteSelected,
+  onUpdateMultiplicity,
   selectedMeta
 }) {
   const [name, setName] = useState('')
   const [attrs, setAttrs] = useState([])
+const [m0, setM0] = useState('1')
+const [m1, setM1] = useState('0..*')
 
   useEffect(() => {
-    setName(selectedMeta?.name || '')
-    setAttrs(selectedMeta?.attributes || [])
+    if (selectedMeta?.isLink) {
+      setM0(selectedMeta.multSource ?? '1')
+      setM1(selectedMeta.multTarget ?? '0..*')
+    }
   }, [selectedMeta])
 
   const disabled = !selectedMeta || selectedMeta.type !== 'uml.Class'
@@ -81,6 +86,30 @@ export default function Sidebar({
             ))}
           </div>
         )}
+
+    {/* Inspector de relación */}
+    {selectedMeta?.isLink && (
+      <div className="section" style={{ marginTop: 16 }}>
+        <h3>Relación seleccionada</h3>
+        <label>Multiplicidad (origen)</label>
+        <input
+          type="text"
+          value={m0}
+          onChange={(e) => setM0(e.target.value)}
+          onBlur={(e) => onUpdateMultiplicity?.(0, e.target.value)}
+          placeholder="1 | 0..1 | * | 0..* | 1..*"
+        />
+        <label style={{ marginTop: 8 }}>Multiplicidad (destino)</label>
+        <input
+          type="text"
+          value={m1}
+          onChange={(e) => setM1(e.target.value)}
+          onBlur={(e) => onUpdateMultiplicity?.(1, e.target.value)}
+          placeholder="1 | 0..1 | * | 0..* | 1..*"
+        />
+        <small>Consejo: si pones <b>*</b> en ambos extremos, se generará una clase intermedia automáticamente.</small>
+      </div>
+    )}
 
 
         {disabled && <small>Selecciona una clase para editar.</small>}

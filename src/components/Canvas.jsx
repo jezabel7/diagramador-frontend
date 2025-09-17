@@ -87,6 +87,22 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
         })
       })
 
+// Selección de LINKS (para multiplicidades)
+      paper.on('link:pointerdown', (linkView) => {
+        const link = linkView.model
+        stateRef.current.selected = link
+        const labels = link.labels() || []
+        const m0 = labels[0]?.attrs?.text?.text || '1'
+        const m1 = labels[1]?.attrs?.text?.text || '0..*'
+        onSelectionChanged?.({
+          id: link.id,
+          type: link.get('type'),
+          isLink: true,
+          multSource: m0,
+          multTarget: m1
+        })
+      })
+
       console.log('UML.Class loaded?', !!joint.shapes.uml?.Class)
       onReady?.()
 
@@ -190,6 +206,58 @@ deleteSelected() {
   // notificar al Inspector que ya no hay selección
   onSelectionChanged?.(null)
 }
+,
+    getGraphJSON() {
+      return graphRef.current.toJSON()
+    },
+    loadFromJSON(json) {
+      graphRef.current.fromJSON(json)
+    },
+    // 🔧 Multiplicidades
+    updateMultiplicity(index, value) {
+      const link = stateRef.current.selected
+      if (!link || !link.isLink()) return
+
+      // Asegurar que existan 2 labels
+      const labels = link.labels() || []
+      if (!labels[0]) link.appendLabel({
+        attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+        position: { distance: 35, offset: -10 }
+      })
+      if (!labels[1]) link.appendLabel({
+        attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+        position: { distance: -35, offset: 10 }
+      })
+
+      // Actualizar el label requerido
+      link.label(index, { attrs: { text: { text: value || '' }, rect: { fill: 'white' } } })
+
+      // Notificar al inspector con los valores actualizados
+      const ls = link.labels() || []
+      const m0 = ls[0]?.attrs?.text?.text || ''
+      const m1 = ls[1]?.attrs?.text?.text || ''
+      onSelectionChanged?.({
+        id: link.id,
+        type: link.get('type'),
+        isLink: true,
+        multSource: m0,
+        multTarget: m1
+      })
+    },
+createManyToMany(fromId, toId) {
+  const graph = graphRef.current
+  if (!graph) return
+
+  const a = graph.getCell(fromId)
+  const b = graph.getCell(toId)
+  if (!a || !b) return
+
+  explodeManyToMany(new joint.shapes.uml.Association({
+    source: { id: a.id },
+    target: { id: b.id }
+  }))
+}
+
   }))
 
   return <div className="canvas" ref={containerRef} />
@@ -213,4 +281,87 @@ function createLink(type, from, to) {
     default:
       return null
   }
+
+     // Multiplicidades por defecto (source y target)
+      link.appendLabel({
+        attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+        position: { distance: 35, offset: -10 }
+      })
+      link.appendLabel({
+        attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+        position: { distance: -35, offset: 10 }
+      })
+
+      return link
+    }
+
+    function isMany(text) {
+      // considera * ó 0..* ó 1..* como "muchos"
+      return typeof text === 'string' && text.includes('*')
+    }
+
+    // Crea asociación con multiplicidades (label 0 = origen/source, 1 = destino/target)
+    function createAssociationWithMultiplicities(from, to, multSource, multTarget) {
+      const link = new joint.shapes.uml.Association({
+        source: { id: from.id },
+        target: { id: to.id }
+      })
+      link.appendLabel({
+        attrs: { text: { text: multSource }, rect: { fill: 'white' } },
+        position: { distance: 35, offset: -10 }
+      })
+      link.appendLabel({
+        attrs: { text: { text: multTarget }, rect: { fill: 'white' } },
+        position: { distance: -35, offset: 10 }
+      })
+      return link
+    }
+
+    // Transforma una asociación N–N en clase intermedia (Join)
+    function explodeManyToMany(link) {
+      // Evitar repetir si ya fue explotado
+      if (link.get('data')?.explodedToJoin) return
+
+      const graph = link.graph
+      const a = link.getSourceElement()
+      const b = link.getTargetElement()
+      if (!a || !b) return
+
+      // Sólo tiene sentido en asociaciones/agre/compo (no en generalización)
+      const type = link.get('type') || ''
+      if (!/Association|Aggregation|Composition/.test(type)) return
+
+      // Crear clase intermedia
+      const nameA = a.get('name') || 'A'
+      const nameB = b.get('name') || 'B'
+      const joinName = `Join_${nameA}_${nameB}`
+
+      const posA = a.position()
+      const posB = b.position()
+      const midX = Math.floor((posA.x + posB.x) / 2)
+      const midY = Math.floor((posA.y + posB.y) / 2)
+
+      const Class = joint.shapes.uml.Class
+      const join = new Class({
+        position: { x: midX - 100, y: midY - 60 },
+        size: { width: 220, height: 120 },
+        name: joinName,
+        attributes: [
+          '+ id: Long',
+          `+ ${nameA}_id: Long`,
+          `+ ${nameB}_id: Long`
+        ],
+        methods: []
+      })
+
+      // Crear nuevas relaciones: A (1) ↔ (*) Join y B (1) ↔ (*) Join
+      const lAJ = createAssociationWithMultiplicities(a, join, '1', '*')
+      const lBJ = createAssociationWithMultiplicities(b, join, '1', '*')
+
+      graph.addCells([join, lAJ, lBJ])
+
+      // Marcar el link original para no re-explotarlo y eliminarlo
+      link.set('data', { ...(link.get('data') || {}), explodedToJoin: true })
+      link.remove()
+
 }
