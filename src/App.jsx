@@ -1,47 +1,87 @@
-import { useEffect, useRef } from "react";
-import * as joint from "@joint/core";
-import "./index.css";
+import React, { useRef, useState, useEffect } from 'react'
+import NavBar from './components/NavBar'
+import Sidebar from './components/Sidebar'
+import Canvas from './components/Canvas'
+import { downloadJSON } from './utils/download'
+import { makeShareLink, decodeShared } from './utils/share'
 
-function App() {
-  const graphRef = useRef(null);
+export default function App() {
+  const canvasRef = useRef(null)
+  const [selectedMeta, setSelectedMeta] = useState(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const graph = new joint.dia.Graph();
+    if (!ready) return
+    const shared = decodeShared()
+    if (shared) {
+      canvasRef.current?.loadFromJSON(shared)
+    }
+  }, [ready])
 
-    const paper = new joint.dia.Paper({
-      el: graphRef.current,
-      model: graph,
-      width: 800,
-      height: 600,
-      gridSize: 10,
-      drawGrid: true,
-    });
+  // Handlers NavBar
+  const handleNew = () => {
+    canvasRef.current?.clear()
+  }
 
-    const rect = new joint.shapes.standard.Rectangle();
-    rect.position(100, 100);
-    rect.resize(120, 40);
-    rect.attr({ body: { fill: "#4e73df", rx: 10, ry: 10 }, label: { text: "Paciente", fill: "white" } });
-    rect.addTo(graph);
+  const handleImport = async (file) => {
+    const text = await file.text()
+    const json = JSON.parse(text)
+    canvasRef.current?.loadFromJSON(json)
+  }
 
-    const rect2 = new joint.shapes.standard.Rectangle();
-    rect2.position(400, 200);
-    rect2.resize(120, 40);
-    rect2.attr({ body: { fill: "#1cc88a", rx: 10, ry: 10 }, label: { text: "Medico", fill: "white" } });
-    rect2.addTo(graph);
+  const handleExport = () => {
+    const json = canvasRef.current?.getGraphJSON()
+    downloadJSON('diagramador_model.json', json)
+  }
 
-    const link = new joint.shapes.standard.Link();
-    link.source(rect);
-    link.target(rect2);
-    link.attr({ line: { stroke: "black", strokeWidth: 2, targetMarker: { type: "classic", fill: "black" } } });
-    link.addTo(graph);
-  }, []);
+  const handleShare = async () => {
+    const json = canvasRef.current?.getGraphJSON()
+    const link = makeShareLink(json)
+    try {
+      await navigator.clipboard.writeText(link)
+      alert('Enlace copiado al portapapeles.')
+    } catch (_) {
+      prompt('Copia el enlace:', link)
+    }
+  }
 
+  // Handlers Sidebar
+  const addClass = () => canvasRef.current?.addClass()
+  const setRelation = (type) => canvasRef.current?.setLinkMode(type)
+  const addAttribute = () => canvasRef.current?.addAttributeToSelected()
+  const renameSelected = (name) => canvasRef.current?.renameSelected(name)
+    const updateAttribute = (i, val) => canvasRef.current?.updateAttributeOfSelected(i, val)
+    const removeAttribute = (i)    => canvasRef.current?.removeAttributeOfSelected(i)
+
+  // 👇 el return DEBE estar aquí dentro
   return (
-    <div>
-      <h1>Diagramador básico</h1>
-      <div ref={graphRef} style={{ border: "1px solid gray", marginTop: 10 }} />
-    </div>
-  );
-}
+    <div className="app-root">
+      <NavBar
+        onNew={handleNew}
+        onImport={handleImport}
+        onExport={handleExport}
+        onShare={handleShare}
+        onReadyDocs={() =>
+          alert('Generación de documentación: disponible al integrar backend.')
+        }
+      />
+      <div className="workspace">
+<Sidebar
+  onAddClass={() => canvasRef.current?.addClass()}
+  onSetRelation={(t) => canvasRef.current?.setLinkMode(t)}
+  onAddAttribute={() => canvasRef.current?.addAttributeToSelected()}
+  onRenameSelected={(n) => canvasRef.current?.renameSelected(n)}
+  onUpdateAttribute={updateAttribute}
+  onRemoveAttribute={removeAttribute}
+  selectedMeta={selectedMeta}
+/>
 
-export default App;
+        <Canvas
+          ref={canvasRef}
+          onSelectionChanged={setSelectedMeta}
+          onReady={() => setReady(true)}
+        />
+      </div>
+    </div>
+  )
+} // 👈 cierre de la función
