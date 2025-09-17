@@ -90,6 +90,8 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       console.log('UML.Class loaded?', !!joint.shapes.uml?.Class)
       onReady?.()
 
+
+
       // Cleanup
       return () => {
         if (!mounted) return
@@ -176,6 +178,17 @@ removeAttributeOfSelected(index) {
   const attrs = [...(el.get('attributes') || [])]
   attrs.splice(index, 1)
   el.set('attributes', attrs)
+},
+deleteSelected() {
+  const el = stateRef.current.selected
+  if (!el) return
+  // borrar links conectados y luego el elemento
+  const links = graphRef.current.getConnectedLinks(el) || []
+  links.forEach(l => l.remove())
+  el.remove()
+  stateRef.current.selected = null
+  // notificar al Inspector que ya no hay selección
+  onSelectionChanged?.(null)
 }
   }))
 

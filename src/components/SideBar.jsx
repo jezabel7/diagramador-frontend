@@ -7,6 +7,7 @@ export default function Sidebar({
   onRenameSelected,
   onUpdateAttribute,
   onRemoveAttribute,
+  onDeleteSelected,
   selectedMeta
 }) {
   const [name, setName] = useState('')
@@ -25,6 +26,14 @@ export default function Sidebar({
         <h3>Elementos</h3>
         <button onClick={onAddClass}>+ Clase</button>
       </div>
+ <div style={{ marginTop: -10 }}>
+                  <button
+                    onClick={onDeleteSelected}
+                    disabled={disabled}
+                  >
+                    Eliminar clase
+                  </button>
+                </div>
 
       <div className="section">
         <h3>Relaciones</h3>
@@ -73,8 +82,11 @@ export default function Sidebar({
           </div>
         )}
 
+
         {disabled && <small>Selecciona una clase para editar.</small>}
       </div>
+
+
     </aside>
   )
 }

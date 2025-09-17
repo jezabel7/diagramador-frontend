@@ -52,6 +52,7 @@ export default function App() {
   const renameSelected = (name) => canvasRef.current?.renameSelected(name)
     const updateAttribute = (i, val) => canvasRef.current?.updateAttributeOfSelected(i, val)
     const removeAttribute = (i)    => canvasRef.current?.removeAttributeOfSelected(i)
+const deleteSelected = () => canvasRef.current?.deleteSelected()
 
   // 👇 el return DEBE estar aquí dentro
   return (
@@ -73,6 +74,7 @@ export default function App() {
   onRenameSelected={(n) => canvasRef.current?.renameSelected(n)}
   onUpdateAttribute={updateAttribute}
   onRemoveAttribute={removeAttribute}
+  onDeleteSelected={deleteSelected}
   selectedMeta={selectedMeta}
 />
 
