@@ -23,7 +23,7 @@ export default function App() {
     canvasRef.current?.clear()
   }
 
-  const handleImport = async (file) => {
+  const handleImport = async file => {
     const text = await file.text()
     const json = JSON.parse(text)
     canvasRef.current?.loadFromJSON(json)
@@ -47,13 +47,13 @@ export default function App() {
 
   // Handlers Sidebar
   const addClass = () => canvasRef.current?.addClass()
-  const setRelation = (type) => canvasRef.current?.setLinkMode(type)
+  const setRelation = type => canvasRef.current?.setLinkMode(type)
   const addAttribute = () => canvasRef.current?.addAttributeToSelected()
-  const renameSelected = (name) => canvasRef.current?.renameSelected(name)
-    const updateAttribute = (i, val) => canvasRef.current?.updateAttributeOfSelected(i, val)
-    const removeAttribute = (i)    => canvasRef.current?.removeAttributeOfSelected(i)
-const deleteSelected = () => canvasRef.current?.deleteSelected()
-const updateMultiplicity = (i, val) => canvasRef.current?.updateMultiplicity(i, val)
+  const renameSelected = name => canvasRef.current?.renameSelected(name)
+  const updateAttribute = (i, val) => canvasRef.current?.updateAttributeOfSelected(i, val)
+  const removeAttribute = i => canvasRef.current?.removeAttributeOfSelected(i)
+  const deleteSelected = () => canvasRef.current?.deleteSelected()
+  const updateMultiplicity = (i, val) => canvasRef.current?.updateMultiplicity(i, val)
 
   // 👇 el return DEBE estar aquí dentro
   return (
@@ -63,22 +63,20 @@ const updateMultiplicity = (i, val) => canvasRef.current?.updateMultiplicity(i, 
         onImport={handleImport}
         onExport={handleExport}
         onShare={handleShare}
-        onReadyDocs={() =>
-          alert('Generación de documentación: disponible al integrar backend.')
-        }
+        onReadyDocs={() => alert('Generación de documentación: disponible al integrar backend.')}
       />
       <div className="workspace">
-<Sidebar
-  onAddClass={() => canvasRef.current?.addClass()}
-  onSetRelation={(t) => canvasRef.current?.setLinkMode(t)}
-  onAddAttribute={() => canvasRef.current?.addAttributeToSelected()}
-  onRenameSelected={(n) => canvasRef.current?.renameSelected(n)}
-  onUpdateAttribute={updateAttribute}
-  onRemoveAttribute={removeAttribute}
-  onDeleteSelected={deleteSelected}
-  onUpdateMultiplicity={updateMultiplicity}
-  selectedMeta={selectedMeta}
-/>
+        <Sidebar
+          onAddClass={() => canvasRef.current?.addClass()}
+          onSetRelation={t => canvasRef.current?.setLinkMode(t)}
+          onAddAttribute={() => canvasRef.current?.addAttributeToSelected()}
+          onRenameSelected={n => canvasRef.current?.renameSelected(n)}
+          onUpdateAttribute={updateAttribute}
+          onRemoveAttribute={removeAttribute}
+          onDeleteSelected={deleteSelected}
+          onUpdateMultiplicity={updateMultiplicity}
+          selectedMeta={selectedMeta}
+        />
 
         <Canvas
           ref={canvasRef}

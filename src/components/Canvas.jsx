@@ -12,7 +12,6 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
     let mounted = true
     const el = containerRef.current
     if (!el) return
-
     ;(async () => {
       // Carga dinámica del plugin UML asegurando window.joint
       try {
@@ -36,7 +35,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
         gridSize: 10,
         drawGrid: true,
         background: { color: '#f7f7fb' },
-        interactive: true
+        interactive: true,
       })
       paperRef.current = paper
 
@@ -45,7 +44,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       window.__paper = paperRef.current
 
       // ResizeObserver para mantener dimensiones correctas
-      const ro = new ResizeObserver((entries) => {
+      const ro = new ResizeObserver(entries => {
         for (const entry of entries) {
           const cr = entry.contentRect
           paperRef.current?.setDimensions(
@@ -57,7 +56,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       ro.observe(el)
 
       // Selección y modo de enlace
-      paper.on('element:pointerdown', (view) => {
+      paper.on('element:pointerdown', view => {
         const st = stateRef.current
         const model = view.model
 
@@ -83,12 +82,12 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
           id: model.id,
           type: model.get('type'),
           name: model.get('name'),
-          attributes: model.get('attributes') || []
+          attributes: model.get('attributes') || [],
         })
       })
 
-// Selección de LINKS (para multiplicidades)
-      paper.on('link:pointerdown', (linkView) => {
+      // Selección de LINKS (para multiplicidades)
+      paper.on('link:pointerdown', linkView => {
         const link = linkView.model
         stateRef.current.selected = link
         const labels = link.labels() || []
@@ -99,14 +98,12 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
           type: link.get('type'),
           isLink: true,
           multSource: m0,
-          multTarget: m1
+          multTarget: m1,
         })
       })
 
       console.log('UML.Class loaded?', !!joint.shapes.uml?.Class)
       onReady?.()
-
-
 
       // Cleanup
       return () => {
@@ -141,7 +138,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
           size: { width: 220, height: 120 },
           name: 'NuevaClase',
           attributes: ['+ id: Long'],
-          methods: []
+          methods: [],
         })
       } else {
         // Fallback visible si no están las shapes UML
@@ -150,7 +147,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
         el.position(80 + Math.random() * 200, 80 + Math.random() * 120)
         el.attr({
           label: { text: 'NuevaClase', fontWeight: '600' },
-          body: { stroke: '#111', fill: '#fff' }
+          body: { stroke: '#111', fill: '#fff' },
         })
         el.set('type', 'uml.Class')
         el.set('name', 'NuevaClase')
@@ -181,32 +178,31 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
     loadFromJSON(json) {
       graphRef.current.fromJSON(json)
     },
-updateAttributeOfSelected(index, value) {
-  const el = stateRef.current.selected
-  if (!el || el.get('type') !== 'uml.Class') return
-  const attrs = [...(el.get('attributes') || [])]
-  attrs[index] = value
-  el.set('attributes', attrs)
-},
-removeAttributeOfSelected(index) {
-  const el = stateRef.current.selected
-  if (!el || el.get('type') !== 'uml.Class') return
-  const attrs = [...(el.get('attributes') || [])]
-  attrs.splice(index, 1)
-  el.set('attributes', attrs)
-},
-deleteSelected() {
-  const el = stateRef.current.selected
-  if (!el) return
-  // borrar links conectados y luego el elemento
-  const links = graphRef.current.getConnectedLinks(el) || []
-  links.forEach(l => l.remove())
-  el.remove()
-  stateRef.current.selected = null
-  // notificar al Inspector que ya no hay selección
-  onSelectionChanged?.(null)
-}
-,
+    updateAttributeOfSelected(index, value) {
+      const el = stateRef.current.selected
+      if (!el || el.get('type') !== 'uml.Class') return
+      const attrs = [...(el.get('attributes') || [])]
+      attrs[index] = value
+      el.set('attributes', attrs)
+    },
+    removeAttributeOfSelected(index) {
+      const el = stateRef.current.selected
+      if (!el || el.get('type') !== 'uml.Class') return
+      const attrs = [...(el.get('attributes') || [])]
+      attrs.splice(index, 1)
+      el.set('attributes', attrs)
+    },
+    deleteSelected() {
+      const el = stateRef.current.selected
+      if (!el) return
+      // borrar links conectados y luego el elemento
+      const links = graphRef.current.getConnectedLinks(el) || []
+      links.forEach(l => l.remove())
+      el.remove()
+      stateRef.current.selected = null
+      // notificar al Inspector que ya no hay selección
+      onSelectionChanged?.(null)
+    },
     getGraphJSON() {
       return graphRef.current.toJSON()
     },
@@ -220,14 +216,16 @@ deleteSelected() {
 
       // Asegurar que existan 2 labels
       const labels = link.labels() || []
-      if (!labels[0]) link.appendLabel({
-        attrs: { text: { text: '1' }, rect: { fill: 'white' } },
-        position: { distance: 35, offset: -10 }
-      })
-      if (!labels[1]) link.appendLabel({
-        attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
-        position: { distance: -35, offset: 10 }
-      })
+      if (!labels[0])
+        link.appendLabel({
+          attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+          position: { distance: 35, offset: -10 },
+        })
+      if (!labels[1])
+        link.appendLabel({
+          attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+          position: { distance: -35, offset: 10 },
+        })
 
       // Actualizar el label requerido
       link.label(index, { attrs: { text: { text: value || '' }, rect: { fill: 'white' } } })
@@ -241,23 +239,24 @@ deleteSelected() {
         type: link.get('type'),
         isLink: true,
         multSource: m0,
-        multTarget: m1
+        multTarget: m1,
       })
     },
-createManyToMany(fromId, toId) {
-  const graph = graphRef.current
-  if (!graph) return
+    createManyToMany(fromId, toId) {
+      const graph = graphRef.current
+      if (!graph) return
 
-  const a = graph.getCell(fromId)
-  const b = graph.getCell(toId)
-  if (!a || !b) return
+      const a = graph.getCell(fromId)
+      const b = graph.getCell(toId)
+      if (!a || !b) return
 
-  explodeManyToMany(new joint.shapes.uml.Association({
-    source: { id: a.id },
-    target: { id: b.id }
-  }))
-}
-
+      explodeManyToMany(
+        new joint.shapes.uml.Association({
+          source: { id: a.id },
+          target: { id: b.id },
+        })
+      )
+    },
   }))
 
   return <div className="canvas" ref={containerRef} />
@@ -282,86 +281,81 @@ function createLink(type, from, to) {
       return null
   }
 
-     // Multiplicidades por defecto (source y target)
-      link.appendLabel({
-        attrs: { text: { text: '1' }, rect: { fill: 'white' } },
-        position: { distance: 35, offset: -10 }
-      })
-      link.appendLabel({
-        attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
-        position: { distance: -35, offset: 10 }
-      })
+  // Multiplicidades por defecto (source y target)
+  link.appendLabel({
+    attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+    position: { distance: 35, offset: -10 },
+  })
+  link.appendLabel({
+    attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+    position: { distance: -35, offset: 10 },
+  })
 
-      return link
-    }
+  return link
+}
 
-    function isMany(text) {
-      // considera * ó 0..* ó 1..* como "muchos"
-      return typeof text === 'string' && text.includes('*')
-    }
+function isMany(text) {
+  // considera * ó 0..* ó 1..* como "muchos"
+  return typeof text === 'string' && text.includes('*')
+}
 
-    // Crea asociación con multiplicidades (label 0 = origen/source, 1 = destino/target)
-    function createAssociationWithMultiplicities(from, to, multSource, multTarget) {
-      const link = new joint.shapes.uml.Association({
-        source: { id: from.id },
-        target: { id: to.id }
-      })
-      link.appendLabel({
-        attrs: { text: { text: multSource }, rect: { fill: 'white' } },
-        position: { distance: 35, offset: -10 }
-      })
-      link.appendLabel({
-        attrs: { text: { text: multTarget }, rect: { fill: 'white' } },
-        position: { distance: -35, offset: 10 }
-      })
-      return link
-    }
+// Crea asociación con multiplicidades (label 0 = origen/source, 1 = destino/target)
+function createAssociationWithMultiplicities(from, to, multSource, multTarget) {
+  const link = new joint.shapes.uml.Association({
+    source: { id: from.id },
+    target: { id: to.id },
+  })
+  link.appendLabel({
+    attrs: { text: { text: multSource }, rect: { fill: 'white' } },
+    position: { distance: 35, offset: -10 },
+  })
+  link.appendLabel({
+    attrs: { text: { text: multTarget }, rect: { fill: 'white' } },
+    position: { distance: -35, offset: 10 },
+  })
+  return link
+}
 
-    // Transforma una asociación N–N en clase intermedia (Join)
-    function explodeManyToMany(link) {
-      // Evitar repetir si ya fue explotado
-      if (link.get('data')?.explodedToJoin) return
+// Transforma una asociación N–N en clase intermedia (Join)
+function explodeManyToMany(link) {
+  // Evitar repetir si ya fue explotado
+  if (link.get('data')?.explodedToJoin) return
 
-      const graph = link.graph
-      const a = link.getSourceElement()
-      const b = link.getTargetElement()
-      if (!a || !b) return
+  const graph = link.graph
+  const a = link.getSourceElement()
+  const b = link.getTargetElement()
+  if (!a || !b) return
 
-      // Sólo tiene sentido en asociaciones/agre/compo (no en generalización)
-      const type = link.get('type') || ''
-      if (!/Association|Aggregation|Composition/.test(type)) return
+  // Sólo tiene sentido en asociaciones/agre/compo (no en generalización)
+  const type = link.get('type') || ''
+  if (!/Association|Aggregation|Composition/.test(type)) return
 
-      // Crear clase intermedia
-      const nameA = a.get('name') || 'A'
-      const nameB = b.get('name') || 'B'
-      const joinName = `Join_${nameA}_${nameB}`
+  // Crear clase intermedia
+  const nameA = a.get('name') || 'A'
+  const nameB = b.get('name') || 'B'
+  const joinName = `Join_${nameA}_${nameB}`
 
-      const posA = a.position()
-      const posB = b.position()
-      const midX = Math.floor((posA.x + posB.x) / 2)
-      const midY = Math.floor((posA.y + posB.y) / 2)
+  const posA = a.position()
+  const posB = b.position()
+  const midX = Math.floor((posA.x + posB.x) / 2)
+  const midY = Math.floor((posA.y + posB.y) / 2)
 
-      const Class = joint.shapes.uml.Class
-      const join = new Class({
-        position: { x: midX - 100, y: midY - 60 },
-        size: { width: 220, height: 120 },
-        name: joinName,
-        attributes: [
-          '+ id: Long',
-          `+ ${nameA}_id: Long`,
-          `+ ${nameB}_id: Long`
-        ],
-        methods: []
-      })
+  const Class = joint.shapes.uml.Class
+  const join = new Class({
+    position: { x: midX - 100, y: midY - 60 },
+    size: { width: 220, height: 120 },
+    name: joinName,
+    attributes: ['+ id: Long', `+ ${nameA}_id: Long`, `+ ${nameB}_id: Long`],
+    methods: [],
+  })
 
-      // Crear nuevas relaciones: A (1) ↔ (*) Join y B (1) ↔ (*) Join
-      const lAJ = createAssociationWithMultiplicities(a, join, '1', '*')
-      const lBJ = createAssociationWithMultiplicities(b, join, '1', '*')
+  // Crear nuevas relaciones: A (1) ↔ (*) Join y B (1) ↔ (*) Join
+  const lAJ = createAssociationWithMultiplicities(a, join, '1', '*')
+  const lBJ = createAssociationWithMultiplicities(b, join, '1', '*')
 
-      graph.addCells([join, lAJ, lBJ])
+  graph.addCells([join, lAJ, lBJ])
 
-      // Marcar el link original para no re-explotarlo y eliminarlo
-      link.set('data', { ...(link.get('data') || {}), explodedToJoin: true })
-      link.remove()
-
+  // Marcar el link original para no re-explotarlo y eliminarlo
+  link.set('data', { ...(link.get('data') || {}), explodedToJoin: true })
+  link.remove()
 }

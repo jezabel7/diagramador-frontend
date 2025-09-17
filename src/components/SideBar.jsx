@@ -9,12 +9,12 @@ export default function Sidebar({
   onRemoveAttribute,
   onDeleteSelected,
   onUpdateMultiplicity,
-  selectedMeta
+  selectedMeta,
 }) {
   const [name, setName] = useState('')
   const [attrs, setAttrs] = useState([])
-const [m0, setM0] = useState('1')
-const [m1, setM1] = useState('0..*')
+  const [m0, setM0] = useState('1')
+  const [m1, setM1] = useState('0..*')
 
   useEffect(() => {
     if (selectedMeta?.isLink) {
@@ -31,14 +31,11 @@ const [m1, setM1] = useState('0..*')
         <h3>Elementos</h3>
         <button onClick={onAddClass}>+ Clase</button>
       </div>
- <div style={{ marginTop: -10 }}>
-                  <button
-                    onClick={onDeleteSelected}
-                    disabled={disabled}
-                  >
-                    Eliminar clase
-                  </button>
-                </div>
+      <div style={{ marginTop: -10 }}>
+        <button onClick={onDeleteSelected} disabled={disabled}>
+          Eliminar clase
+        </button>
+      </div>
 
       <div className="section">
         <h3>Relaciones</h3>
@@ -57,13 +54,15 @@ const [m1, setM1] = useState('0..*')
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={e => setName(e.target.value)}
           onBlur={() => name && onRenameSelected(name)}
           placeholder="NombreClase"
           disabled={disabled}
         />
         <div style={{ marginTop: 8 }}>
-          <button onClick={onAddAttribute} disabled={disabled}>+ Atributo</button>
+          <button onClick={onAddAttribute} disabled={disabled}>
+            + Atributo
+          </button>
         </div>
 
         {/* Lista de atributos */}
@@ -74,48 +73,52 @@ const [m1, setM1] = useState('0..*')
                 <input
                   type="text"
                   value={a}
-                  onChange={(e) => {
+                  onChange={e => {
                     const val = e.target.value
-                    const next = [...attrs]; next[i] = val; setAttrs(next)
+                    const next = [...attrs]
+                    next[i] = val
+                    setAttrs(next)
                   }}
-                  onBlur={(e) => onUpdateAttribute(i, e.target.value)}
+                  onBlur={e => onUpdateAttribute(i, e.target.value)}
                   placeholder="+ campo: Tipo"
                 />
-                <button onClick={() => onRemoveAttribute(i)} title="Eliminar atributo">✕</button>
+                <button onClick={() => onRemoveAttribute(i)} title="Eliminar atributo">
+                  ✕
+                </button>
               </div>
             ))}
           </div>
         )}
 
-    {/* Inspector de relación */}
-    {selectedMeta?.isLink && (
-      <div className="section" style={{ marginTop: 16 }}>
-        <h3>Relación seleccionada</h3>
-        <label>Multiplicidad (origen)</label>
-        <input
-          type="text"
-          value={m0}
-          onChange={(e) => setM0(e.target.value)}
-          onBlur={(e) => onUpdateMultiplicity?.(0, e.target.value)}
-          placeholder="1 | 0..1 | * | 0..* | 1..*"
-        />
-        <label style={{ marginTop: 8 }}>Multiplicidad (destino)</label>
-        <input
-          type="text"
-          value={m1}
-          onChange={(e) => setM1(e.target.value)}
-          onBlur={(e) => onUpdateMultiplicity?.(1, e.target.value)}
-          placeholder="1 | 0..1 | * | 0..* | 1..*"
-        />
-        <small>Consejo: si pones <b>*</b> en ambos extremos, se generará una clase intermedia automáticamente.</small>
-      </div>
-    )}
-
+        {/* Inspector de relación */}
+        {selectedMeta?.isLink && (
+          <div className="section" style={{ marginTop: 16 }}>
+            <h3>Relación seleccionada</h3>
+            <label>Multiplicidad (origen)</label>
+            <input
+              type="text"
+              value={m0}
+              onChange={e => setM0(e.target.value)}
+              onBlur={e => onUpdateMultiplicity?.(0, e.target.value)}
+              placeholder="1 | 0..1 | * | 0..* | 1..*"
+            />
+            <label style={{ marginTop: 8 }}>Multiplicidad (destino)</label>
+            <input
+              type="text"
+              value={m1}
+              onChange={e => setM1(e.target.value)}
+              onBlur={e => onUpdateMultiplicity?.(1, e.target.value)}
+              placeholder="1 | 0..1 | * | 0..* | 1..*"
+            />
+            <small>
+              Consejo: si pones <b>*</b> en ambos extremos, se generará una clase intermedia
+              automáticamente.
+            </small>
+          </div>
+        )}
 
         {disabled && <small>Selecciona una clase para editar.</small>}
       </div>
-
-
     </aside>
   )
 }
