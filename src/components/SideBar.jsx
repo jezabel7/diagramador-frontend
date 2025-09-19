@@ -17,9 +17,16 @@ export default function Sidebar({
   const [m1, setM1] = useState('0..*')
 
   useEffect(() => {
-    if (selectedMeta?.isLink) {
+    if (!selectedMeta) return
+
+    if (selectedMeta.isLink) {
+      // ya lo tienes en otro useEffect; puedes fusionarlo si quieres
       setM0(selectedMeta.multSource ?? '1')
       setM1(selectedMeta.multTarget ?? '0..*')
+    } else {
+      // 👇 sincroniza nombre + atributos cuando seleccionas una clase
+      setName(selectedMeta.name || '')
+      setAttrs(selectedMeta.attributes || [])
     }
   }, [selectedMeta])
 

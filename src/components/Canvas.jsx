@@ -166,11 +166,13 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       const current = el.get('attributes') || []
       const next = current.concat(['+ nuevo: String'])
       el.set('attributes', next)
+      notifySelected(onSelectionChanged, stateRef.current)
     },
     renameSelected(name) {
       const el = stateRef.current.selected
       if (!el || el.get('type') !== 'uml.Class') return
       el.set('name', name)
+      notifySelected(onSelectionChanged, stateRef.current)
     },
     getGraphJSON() {
       return graphRef.current.toJSON()
@@ -184,6 +186,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       const attrs = [...(el.get('attributes') || [])]
       attrs[index] = value
       el.set('attributes', attrs)
+      notifySelected(onSelectionChanged, stateRef.current)
     },
     removeAttributeOfSelected(index) {
       const el = stateRef.current.selected
@@ -191,6 +194,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       const attrs = [...(el.get('attributes') || [])]
       attrs.splice(index, 1)
       el.set('attributes', attrs)
+      notifySelected(onSelectionChanged, stateRef.current)
     },
     deleteSelected() {
       const el = stateRef.current.selected
@@ -358,4 +362,31 @@ function explodeManyToMany(link) {
   // Marcar el link original para no re-explotarlo y eliminarlo
   link.set('data', { ...(link.get('data') || {}), explodedToJoin: true })
   link.remove()
+}
+
+function notifySelected(onSelectionChanged, st) {
+  const el = st.selected
+  if (!el) {
+    onSelectionChanged?.(null)
+    return
+  }
+  if (el.isLink && el.isLink()) {
+    const labels = el.labels() || []
+    const m0 = labels[0]?.attrs?.text?.text || '1'
+    const m1 = labels[1]?.attrs?.text?.text || '0..*'
+    onSelectionChanged?.({
+      id: el.id,
+      type: el.get('type'),
+      isLink: true,
+      multSource: m0,
+      multTarget: m1,
+    })
+  } else {
+    onSelectionChanged?.({
+      id: el.id,
+      type: el.get('type'),
+      name: el.get('name'),
+      attributes: el.get('attributes') || [],
+    })
+  }
 }

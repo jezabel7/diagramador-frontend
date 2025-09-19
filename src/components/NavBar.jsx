@@ -1,6 +1,14 @@
 import React, { useRef } from 'react'
 
-export default function NavBar({ onNew, onImport, onExport, onShare, onReadyDocs }) {
+export default function NavBar({ onNew,
+  onImport,
+  onExport,
+  onShare,
+  onReadyDocs,
+  onGenerateCode,     // 👈
+    genLoading = false, // 👈
+    genDisabled = false // 👈
+  }) {
   const fileRef = useRef(null)
 
   const onClickImport = () => fileRef.current?.click()
@@ -30,6 +38,13 @@ export default function NavBar({ onNew, onImport, onExport, onShare, onReadyDocs
         </button>
         <button onClick={onReadyDocs} title="Swagger/OpenAPI (placeholder)">
           Generar Doc
+        </button>
+        <button
+          onClick={onGenerateCode}
+          title="Generar backend Spring Boot (ZIP)"
+          disabled={genLoading || genDisabled}
+        >
+          {genLoading ? 'Generando…' : 'Generar Código'}
         </button>
         <input ref={fileRef} type="file" accept="application/json" onChange={onFileChange} hidden />
       </div>
