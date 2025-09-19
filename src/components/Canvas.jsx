@@ -2,18 +2,29 @@ import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react
 import * as joint from 'jointjs'
 import 'jointjs/dist/joint.css'
 
-const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) {
+/**
+ * Props:
+ * - onSelectionChanged(meta|null)
+ * - onLocalPatch(patch)   // para emitir patches locales: move, addLink, setMult
+ * - onReady()
+ */
+const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, onReady }, ref) {
   const containerRef = useRef(null)
   const graphRef = useRef(null)
   const paperRef = useRef(null)
-  const stateRef = useRef({ linkMode: null, fromElement: null, selected: null })
+  const stateRef = useRef({ linkMode: null, fromElement: null, selected: null, mute: false })
+
+  // callbacks por ref (evita re-montajes)
+  const cbRef = useRef({ onLocalPatch, onSelectionChanged })
+  useEffect(() => { cbRef.current.onLocalPatch = onLocalPatch }, [onLocalPatch])
+  useEffect(() => { cbRef.current.onSelectionChanged = onSelectionChanged }, [onSelectionChanged])
 
   useEffect(() => {
     let mounted = true
     const el = containerRef.current
     if (!el) return
     ;(async () => {
-      // Carga dinámica del plugin UML asegurando window.joint
+      // Carga plugin UML
       try {
         window.joint = joint
         await import('jointjs/dist/joint.shapes.uml')
@@ -39,11 +50,11 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       })
       paperRef.current = paper
 
-      // Exponer para debug
+      // debug globals
       window.__graph = graphRef.current
       window.__paper = paperRef.current
 
-      // ResizeObserver para mantener dimensiones correctas
+      // Responsive
       const ro = new ResizeObserver(entries => {
         for (const entry of entries) {
           const cr = entry.contentRect
@@ -55,11 +66,12 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       })
       ro.observe(el)
 
-      // Selección y modo de enlace
+      // Click en elemento (selección / creación de relación)
       paper.on('element:pointerdown', view => {
         const st = stateRef.current
         const model = view.model
 
+        // Modo relación
         if (st.linkMode) {
           if (!st.fromElement) {
             st.fromElement = model
@@ -68,8 +80,18 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
           const from = st.fromElement
           const to = model
           if (from.id !== to.id) {
-            const link = createLink(st.linkMode, from, to)
-            if (link) graph.addCell(link)
+            const { link, data } = createLinkWithLabels(st.linkMode, from, to)
+            if (link) {
+              graph.addCell(link)
+              cbRef.current.onLocalPatch?.({
+                t: 'addLink',
+                id: link.id,
+                linkType: data.linkType,    // 'uml.Association', etc.
+                source: data.source,
+                target: data.target,
+                labels: data.labels,        // ['1','0..*']
+              })
+            }
           }
           st.linkMode = null
           st.fromElement = null
@@ -78,34 +100,34 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
 
         // Selección normal
         st.selected = model
-        onSelectionChanged?.({
-          id: model.id,
-          type: model.get('type'),
-          name: model.get('name'),
-          attributes: model.get('attributes') || [],
-        })
+        notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
       })
 
-      // Selección de LINKS (para multiplicidades)
+      // Selección de link (multiplicidades)
       paper.on('link:pointerdown', linkView => {
         const link = linkView.model
         stateRef.current.selected = link
-        const labels = link.labels() || []
-        const m0 = labels[0]?.attrs?.text?.text || '1'
-        const m1 = labels[1]?.attrs?.text?.text || '0..*'
-        onSelectionChanged?.({
-          id: link.id,
-          type: link.get('type'),
-          isLink: true,
-          multSource: m0,
-          multTarget: m1,
-        })
+        notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
       })
 
-      console.log('UML.Class loaded?', !!joint.shapes.uml?.Class)
+      // Movimiento de elementos → patch 'move' (si no está mute)
+      const lastMoveSentRef = new Map()
+
+      graph.on('change:position', cell => {
+        if (stateRef.current.mute) return
+        if (cell.isElement && cell.isElement()) {
+          const now = performance.now()
+          const last = lastMoveSentRef.get(cell.id) || 0
+          if (now - last < 40) return
+          lastMoveSentRef.set(cell.id, now)
+
+          const pos = cell.position()
+          cbRef.current.onLocalPatch?.({ t: 'move', id: cell.id, x: pos.x, y: pos.y })
+        }
+      })
+
       onReady?.()
 
-      // Cleanup
       return () => {
         if (!mounted) return
         ro.disconnect()
@@ -113,153 +135,263 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
       }
     })()
 
-    return () => {
-      mounted = false
+    return () => { mounted = false }
+  }, []) // 👈 sin deps, no re-montar
+
+  // ---- Helpers ----
+  function runMuted(fn) {
+    stateRef.current.mute = true
+    try { fn() } finally { stateRef.current.mute = false }
+  }
+
+  function internalAddClass(init) {
+    if (!graphRef.current) return null
+    const hasUML = !!joint.shapes.uml && !!joint.shapes.uml.Class
+
+    const id = init?.id || (crypto?.randomUUID?.() || String(Date.now()))
+    const name = init?.name || 'NuevaClase'
+    const x = Number.isFinite(init?.x) ? init.x : 80 + Math.random() * 200
+    const y = Number.isFinite(init?.y) ? init.y : 80 + Math.random() * 120
+
+    let el
+    if (hasUML) {
+      const Class = joint.shapes.uml.Class
+      el = new Class({
+        id,
+        position: { x, y },
+        size: { width: 220, height: 120 },
+        name,
+        attributes: ['+ id: Long'],
+        methods: [],
+      })
+    } else {
+      el = new joint.shapes.standard.Rectangle({ id })
+      el.resize(220, 120)
+      el.position(x, y)
+      el.attr({
+        label: { text: name, fontWeight: '600' },
+        body: { stroke: '#111', fill: '#fff' },
+      })
+      el.set('type', 'uml.Class')
+      el.set('name', name)
+      el.set('attributes', ['+ id: Long'])
     }
-  }, [])
+
+    graphRef.current.addCell(el)
+    stateRef.current.selected = el
+    notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+    return { id: el.id, x, y, name: el.get('name') }
+  }
+
+  function setLinkLabel(link, index, value) {
+    const labels = link.labels() || []
+    if (!labels[0])
+      link.appendLabel({
+        attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+        position: { distance: 35, offset: -10 },
+      })
+    if (!labels[1])
+      link.appendLabel({
+        attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+        position: { distance: -35, offset: 10 },
+      })
+    link.label(index, { attrs: { text: { text: value || '' }, rect: { fill: 'white' } } })
+  }
 
   useImperativeHandle(ref, () => ({
     clear() {
       graphRef.current?.clear()
-      stateRef.current = { linkMode: null, fromElement: null, selected: null }
+      stateRef.current = { linkMode: null, fromElement: null, selected: null, mute: false }
+      cbRef.current.onSelectionChanged?.(null)
     },
-    addClass() {
-      console.log('addClass clicked')
-      if (!graphRef.current) {
-        console.warn('Graph no está listo aún.')
-        return
-      }
-      const hasUML = !!joint.shapes.uml && !!joint.shapes.uml.Class
-      let el
-      if (hasUML) {
-        const Class = joint.shapes.uml.Class
-        el = new Class({
-          position: { x: 80 + Math.random() * 200, y: 80 + Math.random() * 120 },
-          size: { width: 220, height: 120 },
-          name: 'NuevaClase',
-          attributes: ['+ id: Long'],
-          methods: [],
-        })
-      } else {
-        // Fallback visible si no están las shapes UML
-        el = new joint.shapes.standard.Rectangle()
-        el.resize(220, 120)
-        el.position(80 + Math.random() * 200, 80 + Math.random() * 120)
-        el.attr({
-          label: { text: 'NuevaClase', fontWeight: '600' },
-          body: { stroke: '#111', fill: '#fff' },
-        })
-        el.set('type', 'uml.Class')
-        el.set('name', 'NuevaClase')
-        el.set('attributes', ['+ id: Long'])
-      }
-      graphRef.current.addCell(el)
-      console.log('Cells count:', graphRef.current.getCells().length)
+
+    addClass(init) {
+      return internalAddClass(init)
     },
+
     setLinkMode(type) {
-      stateRef.current.linkMode = type // assoc/agg/comp/gen
+      stateRef.current.linkMode = type // 'association'|'aggregation'|'composition'|'generalization'
       stateRef.current.fromElement = null
     },
+
     addAttributeToSelected() {
       const el = stateRef.current.selected
       if (!el || el.get('type') !== 'uml.Class') return
-      const current = el.get('attributes') || []
-      const next = current.concat(['+ nuevo: String'])
+      const next = [...(el.get('attributes') || []), '+ nuevo: String']
       el.set('attributes', next)
-      notifySelected(onSelectionChanged, stateRef.current)
+      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
     },
+
     renameSelected(name) {
       const el = stateRef.current.selected
       if (!el || el.get('type') !== 'uml.Class') return
       el.set('name', name)
-      notifySelected(onSelectionChanged, stateRef.current)
+      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
     },
-    getGraphJSON() {
-      return graphRef.current.toJSON()
-    },
-    loadFromJSON(json) {
-      graphRef.current.fromJSON(json)
-    },
+
     updateAttributeOfSelected(index, value) {
       const el = stateRef.current.selected
       if (!el || el.get('type') !== 'uml.Class') return
       const attrs = [...(el.get('attributes') || [])]
       attrs[index] = value
       el.set('attributes', attrs)
-      notifySelected(onSelectionChanged, stateRef.current)
+      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
     },
+
     removeAttributeOfSelected(index) {
       const el = stateRef.current.selected
       if (!el || el.get('type') !== 'uml.Class') return
       const attrs = [...(el.get('attributes') || [])]
       attrs.splice(index, 1)
       el.set('attributes', attrs)
-      notifySelected(onSelectionChanged, stateRef.current)
+      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
     },
+
     deleteSelected() {
       const el = stateRef.current.selected
       if (!el) return
-      // borrar links conectados y luego el elemento
-      const links = graphRef.current.getConnectedLinks(el) || []
-      links.forEach(l => l.remove())
+      if (el.isElement && el.isElement()) {
+        const links = graphRef.current.getConnectedLinks(el) || []
+        links.forEach(l => l.remove())
+      }
       el.remove()
       stateRef.current.selected = null
-      // notificar al Inspector que ya no hay selección
-      onSelectionChanged?.(null)
+      cbRef.current.onSelectionChanged?.(null)
     },
+
     getGraphJSON() {
       return graphRef.current.toJSON()
     },
+
     loadFromJSON(json) {
-      graphRef.current.fromJSON(json)
+      runMuted(() => {
+        graphRef.current.fromJSON(json)
+      })
+      // limpiar selección
+      cbRef.current.onSelectionChanged?.(null)
     },
-    // 🔧 Multiplicidades
+
+    // Multiplicidades (local) → también emite WS
     updateMultiplicity(index, value) {
       const link = stateRef.current.selected
       if (!link || !link.isLink()) return
-
-      // Asegurar que existan 2 labels
-      const labels = link.labels() || []
-      if (!labels[0])
-        link.appendLabel({
-          attrs: { text: { text: '1' }, rect: { fill: 'white' } },
-          position: { distance: 35, offset: -10 },
-        })
-      if (!labels[1])
-        link.appendLabel({
-          attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
-          position: { distance: -35, offset: 10 },
-        })
-
-      // Actualizar el label requerido
-      link.label(index, { attrs: { text: { text: value || '' }, rect: { fill: 'white' } } })
-
-      // Notificar al inspector con los valores actualizados
-      const ls = link.labels() || []
-      const m0 = ls[0]?.attrs?.text?.text || ''
-      const m1 = ls[1]?.attrs?.text?.text || ''
-      onSelectionChanged?.({
-        id: link.id,
-        type: link.get('type'),
-        isLink: true,
-        multSource: m0,
-        multTarget: m1,
-      })
+      setLinkLabel(link, index, value)
+      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+      cbRef.current.onLocalPatch?.({ t: 'setMult', id: link.id, index, value })
     },
-    createManyToMany(fromId, toId) {
-      const graph = graphRef.current
-      if (!graph) return
 
-      const a = graph.getCell(fromId)
-      const b = graph.getCell(toId)
-      if (!a || !b) return
+    // Aplicar patches remotos (sin re-emitir)
+    applyPatch(patch) {
+      if (!patch || !graphRef.current) return
+      const type = patch.t
+      const get = id => graphRef.current.getCell(id)
 
-      explodeManyToMany(
-        new joint.shapes.uml.Association({
-          source: { id: a.id },
-          target: { id: b.id },
-        })
-      )
+      switch (type) {
+        case 'addClass': {
+          if (get(patch.id)) return
+          return runMuted(() =>
+            internalAddClass({ id: patch.id, name: patch.name, x: patch.x, y: patch.y })
+          )
+        }
+        case 'delClass': {
+          const el = get(patch.id)
+          if (!el) return
+          runMuted(() => {
+            if (el.isElement && el.isElement()) {
+              const links = graphRef.current.getConnectedLinks(el) || []
+              links.forEach(l => l.remove())
+            }
+            el.remove()
+          })
+          if (stateRef.current.selected?.id === patch.id) cbRef.current.onSelectionChanged?.(null)
+          return
+        }
+        case 'rename': {
+          const el = get(patch.id)
+          if (el && el.get('type') === 'uml.Class') {
+            el.set('name', patch.name || el.get('name'))
+            if (stateRef.current.selected?.id === el.id) {
+              notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+            }
+          }
+          return
+        }
+        case 'move': {
+          const el = get(patch.id)
+          if (el && el.isElement && el.isElement()) {
+            runMuted(() => el.position(patch.x, patch.y))
+          }
+          return
+        }
+        case 'addLink': {
+          if (get(patch.id)) return
+          const from = get(patch.source)
+          const to = get(patch.target)
+          if (!from || !to) return
+          runMuted(() => {
+            const { link } = createLinkWithLabels(
+              patch.linkType, // 'uml.Association' o 'association'
+              from,
+              to,
+              patch.id,
+              patch.labels
+            )
+            if (link) graphRef.current.addCell(link)
+          })
+          return
+        }
+        case 'setMult': {
+          const link = get(patch.id)
+          if (!link || !link.isLink()) return
+          runMuted(() => setLinkLabel(link, patch.index, patch.value))
+          if (stateRef.current.selected?.id === link.id) {
+            notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+          }
+          return
+        }
+        case 'addAttr': {
+          const el = get(patch.id)
+          if (el && el.get('type') === 'uml.Class') {
+            const attrs = [...(el.get('attributes') || [])]
+            attrs.push(patch.value)
+            el.set('attributes', attrs)
+            if (stateRef.current.selected?.id === el.id) {
+              notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+            }
+          }
+          return
+        }
+        case 'updAttr': {
+          const el = get(patch.id)
+          if (el && el.get('type') === 'uml.Class') {
+            const attrs = [...(el.get('attributes') || [])]
+            if (attrs[patch.index] !== undefined) {
+              attrs[patch.index] = patch.value
+              el.set('attributes', attrs)
+              if (stateRef.current.selected?.id === el.id) {
+                notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+              }
+            }
+          }
+          return
+        }
+        case 'delAttr': {
+          const el = get(patch.id)
+          if (el && el.get('type') === 'uml.Class') {
+            const attrs = [...(el.get('attributes') || [])]
+            if (attrs[patch.index] !== undefined) {
+              attrs.splice(patch.index, 1)
+              el.set('attributes', attrs)
+              if (stateRef.current.selected?.id === el.id) {
+                notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
+              }
+            }
+          }
+          return
+        }
+        default:
+          return
+      }
     },
   }))
 
@@ -268,108 +400,61 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onReady }, ref) 
 
 export default Canvas
 
-// Helpers
-function createLink(type, from, to) {
+// ------------ Helpers ------------
+function createLinkWithLabels(type, from, to, forcedId, labels = ['1', '0..*']) {
+  const normalize = (t) => (t?.split('.').pop() || t || '').toLowerCase()
+  const key = normalize(type)
+
   const s = { id: from.id }
   const t = { id: to.id }
-  switch (type) {
+  let link
+  let linkType
+
+  switch (key) {
     case 'association':
-      return new joint.shapes.uml.Association({ source: s, target: t })
+      linkType = 'uml.Association'
+      link = new joint.shapes.uml.Association({ id: forcedId, source: s, target: t })
+      break
     case 'aggregation':
-      return new joint.shapes.uml.Aggregation({ source: s, target: t })
+      linkType = 'uml.Aggregation'
+      link = new joint.shapes.uml.Aggregation({ id: forcedId, source: s, target: t })
+      break
     case 'composition':
-      return new joint.shapes.uml.Composition({ source: s, target: t })
+      linkType = 'uml.Composition'
+      link = new joint.shapes.uml.Composition({ id: forcedId, source: s, target: t })
+      break
     case 'generalization':
-      return new joint.shapes.uml.Generalization({ source: s, target: t })
+      linkType = 'uml.Generalization'
+      link = new joint.shapes.uml.Generalization({ id: forcedId, source: s, target: t })
+      break
     default:
-      return null
+      return { link: null, data: null }
   }
 
-  // Multiplicidades por defecto (source y target)
+  // labels por defecto
   link.appendLabel({
-    attrs: { text: { text: '1' }, rect: { fill: 'white' } },
+    attrs: { text: { text: labels[0] ?? '1' }, rect: { fill: 'white' } },
     position: { distance: 35, offset: -10 },
   })
   link.appendLabel({
-    attrs: { text: { text: '0..*' }, rect: { fill: 'white' } },
+    attrs: { text: { text: labels[1] ?? '0..*' }, rect: { fill: 'white' } },
     position: { distance: -35, offset: 10 },
   })
 
-  return link
-}
-
-function isMany(text) {
-  // considera * ó 0..* ó 1..* como "muchos"
-  return typeof text === 'string' && text.includes('*')
-}
-
-// Crea asociación con multiplicidades (label 0 = origen/source, 1 = destino/target)
-function createAssociationWithMultiplicities(from, to, multSource, multTarget) {
-  const link = new joint.shapes.uml.Association({
-    source: { id: from.id },
-    target: { id: to.id },
-  })
-  link.appendLabel({
-    attrs: { text: { text: multSource }, rect: { fill: 'white' } },
-    position: { distance: 35, offset: -10 },
-  })
-  link.appendLabel({
-    attrs: { text: { text: multTarget }, rect: { fill: 'white' } },
-    position: { distance: -35, offset: 10 },
-  })
-  return link
-}
-
-// Transforma una asociación N–N en clase intermedia (Join)
-function explodeManyToMany(link) {
-  // Evitar repetir si ya fue explotado
-  if (link.get('data')?.explodedToJoin) return
-
-  const graph = link.graph
-  const a = link.getSourceElement()
-  const b = link.getTargetElement()
-  if (!a || !b) return
-
-  // Sólo tiene sentido en asociaciones/agre/compo (no en generalización)
-  const type = link.get('type') || ''
-  if (!/Association|Aggregation|Composition/.test(type)) return
-
-  // Crear clase intermedia
-  const nameA = a.get('name') || 'A'
-  const nameB = b.get('name') || 'B'
-  const joinName = `Join_${nameA}_${nameB}`
-
-  const posA = a.position()
-  const posB = b.position()
-  const midX = Math.floor((posA.x + posB.x) / 2)
-  const midY = Math.floor((posA.y + posB.y) / 2)
-
-  const Class = joint.shapes.uml.Class
-  const join = new Class({
-    position: { x: midX - 100, y: midY - 60 },
-    size: { width: 220, height: 120 },
-    name: joinName,
-    attributes: ['+ id: Long', `+ ${nameA}_id: Long`, `+ ${nameB}_id: Long`],
-    methods: [],
-  })
-
-  // Crear nuevas relaciones: A (1) ↔ (*) Join y B (1) ↔ (*) Join
-  const lAJ = createAssociationWithMultiplicities(a, join, '1', '*')
-  const lBJ = createAssociationWithMultiplicities(b, join, '1', '*')
-
-  graph.addCells([join, lAJ, lBJ])
-
-  // Marcar el link original para no re-explotarlo y eliminarlo
-  link.set('data', { ...(link.get('data') || {}), explodedToJoin: true })
-  link.remove()
+  return {
+    link,
+    data: {
+      linkType,               // 'uml.Association', etc.
+      source: from.id,
+      target: to.id,
+      labels: [labels[0] ?? '1', labels[1] ?? '0..*'],
+    },
+  }
 }
 
 function notifySelected(onSelectionChanged, st) {
   const el = st.selected
-  if (!el) {
-    onSelectionChanged?.(null)
-    return
-  }
+  if (!el) { onSelectionChanged?.(null); return }
   if (el.isLink && el.isLink()) {
     const labels = el.labels() || []
     const m0 = labels[0]?.attrs?.text?.text || '1'
