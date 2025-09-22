@@ -51,6 +51,8 @@ export default function Sidebar({
           <button onClick={() => onSetRelation('aggregation')}>Agregación</button>
           <button onClick={() => onSetRelation('composition')}>Composición</button>
           <button onClick={() => onSetRelation('generalization')}>Generalización</button>
+          <button onClick={() => onSetRelation('dependency')}>Dependency</button>
+          <button onClick={() => onSetRelation('realization')}>Realization</button>
         </div>
         <small>Selecciona tipo y luego clic en origen → destino</small>
       </div>
@@ -98,7 +100,8 @@ export default function Sidebar({
         )}
 
         {/* Inspector de relación */}
-        {selectedMeta?.isLink && (
+        {/* Inspector de relación */}
+        {selectedMeta?.isLink && selectedMeta?.type === 'uml.Association' && (
           <div className="section" style={{ marginTop: 16 }}>
             <h3>Relación seleccionada</h3>
             <label>Multiplicidad (origen)</label>
@@ -117,10 +120,7 @@ export default function Sidebar({
               onBlur={e => onUpdateMultiplicity?.(1, e.target.value)}
               placeholder="1 | 0..1 | * | 0..* | 1..*"
             />
-            <small>
-              Consejo: si pones <b>*</b> en ambos extremos, se generará una clase intermedia
-              automáticamente.
-            </small>
+            <small>Consejo: multiplicidades solo para asociaciones.</small>
           </div>
         )}
 

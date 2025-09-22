@@ -71,7 +71,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
         const st = stateRef.current
         const model = view.model
 
-        // Modo relación
+       // Modo de crear relación
         if (st.linkMode) {
           if (!st.fromElement) {
             st.fromElement = model
@@ -79,19 +79,26 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
           }
           const from = st.fromElement
           const to = model
-          if (from.id !== to.id) {
-            const { link, data } = createLinkWithLabels(st.linkMode, from, to)
-            if (link) {
-              graph.addCell(link)
-              cbRef.current.onLocalPatch?.({
-                t: 'addLink',
-                id: link.id,
-                linkType: data.linkType,    // 'uml.Association', etc.
-                source: data.source,
-                target: data.target,
-                labels: data.labels,        // ['1','0..*']
-              })
-            }
+
+          // self-link: solo permitido para ASSOCIATION
+          const isSelf = from.id === to.id
+          if (isSelf && st.linkMode !== 'association') {
+            st.linkMode = null
+            st.fromElement = null
+            return
+          }
+
+          const { link, data } = createLinkWithLabels(st.linkMode, from, to)
+          if (link) {
+            graph.addCell(link)
+            cbRef.current.onLocalPatch?.({
+              t: 'addLink',
+              id: link.id,
+              linkType: data.linkType,   // e.g. 'uml.Association' | 'custom.Dependency' | ...
+              source: data.source,
+              target: data.target,
+              labels: data.labels,       // solo en association
+            })
           }
           st.linkMode = null
           st.fromElement = null
@@ -104,8 +111,9 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
       })
 
       // Selección de link (multiplicidades)
-      paper.on('link:pointerdown', linkView => {
-        const link = linkView.model
+      paper.on('link:pointerdown', v => {
+        const link = v.model
+        console.log('link type:', link.get('type'), link.attributes)
         stateRef.current.selected = link
         notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
       })
@@ -184,6 +192,9 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
   }
 
   function setLinkLabel(link, index, value) {
+    // Solo en Association
+    if (link.get('type') !== 'uml.Association') return
+
     const labels = link.labels() || []
     if (!labels[0])
       link.appendLabel({
@@ -274,10 +285,10 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
     // Multiplicidades (local) → también emite WS
     updateMultiplicity(index, value) {
       const link = stateRef.current.selected
-      if (!link || !link.isLink()) return
+      if (!link || !link.isLink() || link.get('type') !== 'uml.Association') return
       setLinkLabel(link, index, value)
-      notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
-      cbRef.current.onLocalPatch?.({ t: 'setMult', id: link.id, index, value })
+      notifySelected(onSelectionChanged, stateRef.current)
+      onLocalPatch?.({ t: 'setMult', id: link.id, index, value })
     },
 
     // Aplicar patches remotos (sin re-emitir)
@@ -402,52 +413,73 @@ export default Canvas
 
 // ------------ Helpers ------------
 function createLinkWithLabels(type, from, to, forcedId, labels = ['1', '0..*']) {
-  const normalize = (t) => (t?.split('.').pop() || t || '').toLowerCase()
-  const key = normalize(type)
-
+const norm = String(type || '')
+  .toLowerCase()
+  .replace(/^uml\./, '')
+  .replace(/^custom\./, '')
   const s = { id: from.id }
   const t = { id: to.id }
   let link
-  let linkType
+  let linkType // nombre “canónico” para mandar por WS
 
-  switch (key) {
-    case 'association':
-      linkType = 'uml.Association'
-      link = new joint.shapes.uml.Association({ id: forcedId, source: s, target: t })
-      break
-    case 'aggregation':
-      linkType = 'uml.Aggregation'
-      link = new joint.shapes.uml.Aggregation({ id: forcedId, source: s, target: t })
-      break
-    case 'composition':
-      linkType = 'uml.Composition'
-      link = new joint.shapes.uml.Composition({ id: forcedId, source: s, target: t })
-      break
-    case 'generalization':
-      linkType = 'uml.Generalization'
-      link = new joint.shapes.uml.Generalization({ id: forcedId, source: s, target: t })
-      break
-    default:
-      return { link: null, data: null }
+  if (norm === 'association') {
+    linkType = 'uml.Association'
+    link = new joint.shapes.uml.Association({ id: forcedId, source: s, target: t })
+
+    // loop por defecto si es self-association
+    if (from.id === to.id) {
+      const bb = from.getBBox()
+      const vx = bb.x + bb.width + 40
+      const vy = bb.y + bb.height / 2
+      link.set('vertices', [{ x: vx, y: vy }])
+    }
+
+    // multiplicidades solo en Association
+    link.appendLabel({
+      attrs: { text: { text: labels[0] ?? '1' }, rect: { fill: 'white' } },
+      position: { distance: 35, offset: -10 },
+    })
+    link.appendLabel({
+      attrs: { text: { text: labels[1] ?? '0..*' }, rect: { fill: 'white' } },
+      position: { distance: -35, offset: 10 },
+    })
+
+  } else if (norm === 'aggregation') {
+    linkType = 'uml.Aggregation'
+    link = new joint.shapes.uml.Aggregation({ id: forcedId, source: s, target: t })
+
+  } else if (norm === 'composition') {
+    linkType = 'uml.Composition'
+    link = new joint.shapes.uml.Composition({ id: forcedId, source: s, target: t })
+
+  } else if (norm === 'generalization') {
+    linkType = 'uml.Generalization'
+    link = new joint.shapes.uml.Generalization({ id: forcedId, source: s, target: t })
+
+  } else if (norm === 'dependency') {
+      linkType = 'custom.Dependency'
+      link = new joint.dia.Link({ id: forcedId, type: 'custom.Dependency', source: s, target: t })
+      link.attr({
+        '.connection': { 'stroke-dasharray': '6 4', 'stroke-width': 1.5, stroke: '#000' },
+        '.marker-target': { d: 'M 8 -4 0 0 8 4', fill: 'none', stroke: '#000' }
+      })
+
+    } else if (norm === 'realization') {
+      linkType = 'custom.Realization'
+      link = new joint.shapes.standard.Link({ id: forcedId, type: 'custom.Realization', source: s, target: t })
+      link.attr({ line: { strokeDasharray: '6 4', strokeWidth: 1.5, stroke: '#000',
+        targetMarker: { type: 'path', d: 'M 12 0 0 -7 0 7 z', fill: 'white', stroke: '#000' } } })
+  } else {
+    return { link: null, data: null }
   }
-
-  // labels por defecto
-  link.appendLabel({
-    attrs: { text: { text: labels[0] ?? '1' }, rect: { fill: 'white' } },
-    position: { distance: 35, offset: -10 },
-  })
-  link.appendLabel({
-    attrs: { text: { text: labels[1] ?? '0..*' }, rect: { fill: 'white' } },
-    position: { distance: -35, offset: 10 },
-  })
 
   return {
     link,
     data: {
-      linkType,               // 'uml.Association', etc.
+      linkType,          // usarás esto en el patch
       source: from.id,
       target: to.id,
-      labels: [labels[0] ?? '1', labels[1] ?? '0..*'],
+      labels: (linkType === 'uml.Association') ? [labels[0] ?? '1', labels[1] ?? '0..*'] : undefined,
     },
   }
 }
@@ -455,23 +487,34 @@ function createLinkWithLabels(type, from, to, forcedId, labels = ['1', '0..*']) 
 function notifySelected(onSelectionChanged, st) {
   const el = st.selected
   if (!el) { onSelectionChanged?.(null); return }
+
   if (el.isLink && el.isLink()) {
-    const labels = el.labels() || []
-    const m0 = labels[0]?.attrs?.text?.text || '1'
-    const m1 = labels[1]?.attrs?.text?.text || '0..*'
-    onSelectionChanged?.({
-      id: el.id,
-      type: el.get('type'),
-      isLink: true,
-      multSource: m0,
-      multTarget: m1,
-    })
-  } else {
-    onSelectionChanged?.({
-      id: el.id,
-      type: el.get('type'),
-      name: el.get('name'),
-      attributes: el.get('attributes') || [],
-    })
+    const type = el.get('type')
+    if (type === 'uml.Association') {
+      const labels = el.labels() || []
+      const m0 = labels[0]?.attrs?.text?.text || '1'
+      const m1 = labels[1]?.attrs?.text?.text || '0..*'
+      onSelectionChanged?.({
+        id: el.id,
+        type,
+        isLink: true,
+        multSource: m0,
+        multTarget: m1,
+      })
+    } else {
+      onSelectionChanged?.({
+        id: el.id,
+        type,
+        isLink: true, // sin multiplicidades
+      })
+    }
+    return
   }
+
+  onSelectionChanged?.({
+    id: el.id,
+    type: el.get('type'),
+    name: el.get('name'),
+    attributes: el.get('attributes') || [],
+  })
 }
