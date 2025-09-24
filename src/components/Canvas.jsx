@@ -117,6 +117,24 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
         stateRef.current.selected = link
         notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
       })
+    // delete linea?
+    graph.on('remove', (cell) => {
+      if (stateRef.current.mute) return
+      if (cell.isLink && cell.isLink()) {
+        cbRef.current.onLocalPatch?.({ t: 'delLink', id: cell.id })
+      }
+    })
+    graph.on('change:source change:target', (link) => {
+      if (stateRef.current.mute || !(link.isLink && link.isLink())) return
+      const s = link.get('source')?.id || null
+      const t = link.get('target')?.id || null
+      cbRef.current.onLocalPatch?.({ t: 'relink', id: link.id, source: s, target: t })
+    })
+
+    graph.on('change:vertices', (link) => {
+      if (stateRef.current.mute || !(link.isLink && link.isLink())) return
+      cbRef.current.onLocalPatch?.({ t: 'linkVerts', id: link.id, vertices: link.vertices() || [] })
+    })
 
       // Movimiento de elementos → patch 'move' (si no está mute)
       const lastMoveSentRef = new Map()
@@ -315,6 +333,30 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
             el.remove()
           })
           if (stateRef.current.selected?.id === patch.id) cbRef.current.onSelectionChanged?.(null)
+          return
+        }
+      // delete link
+        case 'delLink': {
+          const l = get(patch.id)
+          if (l && l.isLink && l.isLink()) {
+            runMuted(() => l.remove())             // 👈 evita bucle: no vuelve a mandar delLink
+            if (stateRef.current.selected?.id === patch.id) onSelectionChanged?.(null)
+          }
+          return
+        }
+        case 'relink': {
+          const l = get(patch.id)
+          if (!l || !l.isLink || !l.isLink()) return
+          runMuted(() => {
+            if (patch.source) l.set('source', { id: patch.source })
+            if (patch.target) l.set('target', { id: patch.target })
+          })
+          return
+        }
+        case 'linkVerts': {
+          const l = get(patch.id)
+          if (!l || !l.isLink || !l.isLink()) return
+          runMuted(() => l.set('vertices', patch.vertices || []))
           return
         }
         case 'rename': {
