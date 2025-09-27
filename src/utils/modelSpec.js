@@ -76,38 +76,79 @@ export function buildModelSpecFromGraph(graphJSON, opts = {}) {
     name = 'generated-app',
     version = '0.0.1',
     packageBase = 'com.jezabel.generated',
-  } = opts;
+  } = opts
 
-  const cells = graphJSON?.cells || [];
-  const entities = [];
+  const cells = graphJSON?.cells || []
+
+  // 1) Recoger entidades y mapa id->nombre
+  const entities = []
+  const idToName = new Map()
 
   for (const c of cells) {
-    const type = c.type || c.attrs?.type;
-    if (type !== 'uml.Class') continue;
+    const type = c.type || c.attrs?.type
+    if (type !== 'uml.Class') continue
 
-    const entityName = c.name || c.attrs?.label?.text || 'Unnamed';
-    const rawAttrs = c.attributes || c.attrs?.attributes || [];
+    const entityNameRaw = c.name || c.attrs?.label?.text || 'Unnamed'
+    const entityName = entityNameRaw.replace(/\W+/g, '')
+    idToName.set(c.id, entityName)
 
-    const attrs = [];
+    const rawAttrs = c.attributes || c.attrs?.attributes || []
+    const attrs = []
     for (const line of rawAttrs) {
-      const parsed = parseAttributeLine(line);
-      if (parsed) attrs.push(parsed);
+      const parsed = parseAttributeLine(line)
+      if (parsed) attrs.push(parsed)
     }
-
-    // Si no hay PK, y existe "id" → márcalo como PK por defecto
+    // PK por defecto si hay "id"
     if (!attrs.some(a => a.pk)) {
-      const idAttr = attrs.find(a => a.name.toLowerCase() === 'id');
+      const idAttr = attrs.find(a => a.name?.toLowerCase() === 'id')
       if (idAttr) {
-        idAttr.pk = true;
-        if (!idAttr.generated) idAttr.generated = 'IDENTITY';
+        idAttr.pk = true
+        if (!idAttr.generated) idAttr.generated = 'IDENTITY'
       }
     }
 
-    entities.push({
-      name: entityName.replace(/\W+/g, ''), // nombre limpio
-      attributes: attrs,
-    });
+    entities.push({ name: entityName, attributes: attrs })
   }
 
-  return { name, version, packageBase, entities };
+  // 2) Recoger relaciones
+  const relations = []
+  const seen = new Set() // para dedupe simple
+
+  for (const c of cells) {
+    const t = String(c.type || '').toLowerCase()
+    const isLink = !!(c.source && c.target)
+    if (!isLink) continue
+
+    // normalizar tipo
+    const norm = t.replace(/^uml\./, '').replace(/^custom\./, '')
+    if (!['association', 'aggregation', 'composition', 'generalization', 'dependency', 'realization'].includes(norm)) {
+      continue
+    }
+
+    const srcName = idToName.get(c.source?.id)
+    const tgtName = idToName.get(c.target?.id)
+    if (!srcName || !tgtName) continue
+
+    let multSource, multTarget
+    if (norm === 'association') {
+      // labels[0] = source, labels[1] = target (como definimos en Canvas)
+      const labels = c.labels || []
+      multSource = labels[0]?.attrs?.text?.text || '1'
+      multTarget = labels[1]?.attrs?.text?.text || '0..*'
+    }
+
+    const key = `${norm}|${srcName}|${tgtName}|${multSource || ''}|${multTarget || ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    relations.push({
+      type: norm,              // association | aggregation | composition | generalization | dependency | realization
+      source: srcName,         // nombre de clase
+      target: tgtName,         // nombre de clase
+      ...(norm === 'association' ? { multSource, multTarget } : {}),
+    })
+  }
+
+  return { name, version, packageBase, entities, relations }
 }
+
