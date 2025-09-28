@@ -19,6 +19,7 @@ export default function App() {
   const [selectedMeta, setSelectedMeta] = useState(null)
   const [ready, setReady] = useState(false)
   const [genLoading, setGenLoading] = useState(false)
+  const [docLoading, setDocLoading] = useState(false)
 
   // docId: de la URL o generamos uno y lo fijamos en la URL
   const docId = useMemo(() => {
@@ -49,6 +50,55 @@ export default function App() {
     canvasRef.current?.applyPatch?.(patch)
   }
   const { sendPatch } = useGraphWs({ docId, onPatch: handleRemotePatch })
+
+  const handleGenerateDocAi = async () => {
+    try {
+      setDocLoading(true)
+
+      // Igual que codegen: construye el modelSpec desde el canvas
+      const graphJSON = canvasRef.current?.getGraphJSON?.()
+      if (!graphJSON?.cells?.length) { alert('No hay diagrama.'); return }
+
+      const modelSpec = buildModelSpecFromGraph(graphJSON, {
+        name: 'diagramador-generated',
+        version: '0.0.1',
+        packageBase: 'com.jezabel.healthgen',
+      })
+
+      // Guarda spec y obtén id
+      const resGen = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(modelSpec),
+      })
+      if (!resGen.ok) throw new Error(await resGen.text())
+      const { id } = await resGen.json()
+
+      // Pide PDF IA
+      const resPdf = await fetch('/api/ai/docs', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ id, filename: `${modelSpec.name}-doc.pdf` }),
+      })
+      if (!resPdf.ok) throw new Error(await resPdf.text())
+      const blob = await resPdf.blob()
+
+      // Descargar
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${modelSpec.name}-doc.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo generar el PDF IA.\n' + (e.message || e))
+    } finally {
+      setDocLoading(false)
+    }
+  }
 
   // NavBar handlers
   const handleNew = () => canvasRef.current?.clear()
@@ -183,7 +233,9 @@ export default function App() {
         onImport={handleImport}
         onExport={handleExport}
         onShare={handleShare}
-        onReadyDocs={() => alert('Generación de documentación: disponible al integrar backend.')}
+        onGenerateDocAi={handleGenerateDocAi}
+        docLoading={docLoading}
+        docDisabled={!ready}
         onGenerateCode={handleGenerateCode}
         genLoading={genLoading}
         genDisabled={!ready}

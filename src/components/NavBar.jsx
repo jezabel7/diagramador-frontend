@@ -4,7 +4,9 @@ export default function NavBar({ onNew,
   onImport,
   onExport,
   onShare,
-  onReadyDocs,
+  onGenerateDocAi,
+    docLoading,
+    docDisabled,
   onGenerateCode,     // 👈
     genLoading = false, // 👈
     genDisabled = false // 👈
@@ -36,9 +38,6 @@ export default function NavBar({ onNew,
         <button onClick={onShare} title="Compartir enlace de snapshot">
           Compartir
         </button>
-        <button onClick={onReadyDocs} title="Swagger/OpenAPI (placeholder)">
-          Generar Doc
-        </button>
         <button
           onClick={onGenerateCode}
           title="Generar backend Spring Boot (ZIP)"
@@ -46,6 +45,14 @@ export default function NavBar({ onNew,
         >
           {genLoading ? 'Generando…' : 'Generar Código'}
         </button>
+        <button
+          onClick={onGenerateDocAi}
+          disabled={docDisabled || docLoading}
+          title="Generar documentación (IA) en PDF"
+        >
+          {docLoading ? 'Creando PDF…' : 'Generar PDF'}
+        </button>
+
         <input ref={fileRef} type="file" accept="application/json" onChange={onFileChange} hidden />
       </div>
     </header>
