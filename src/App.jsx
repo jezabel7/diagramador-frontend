@@ -5,6 +5,7 @@ import Canvas from './components/Canvas'
 import { downloadJSON } from './utils/download'
 import { buildModelSpecFromGraph } from './utils/modelSpec'
 import { useGraphWs } from './ws/useGraphWs'
+import AiDiagramModal from './components/AiDiagramModal'
 
 // Utilidades de compartir (vamos a inyectar docId en el link)
 function encodeSnapshot(json) {
@@ -20,6 +21,9 @@ export default function App() {
   const [ready, setReady] = useState(false)
   const [genLoading, setGenLoading] = useState(false)
   const [docLoading, setDocLoading] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
 
   // docId: de la URL o generamos uno y lo fijamos en la URL
   const docId = useMemo(() => {
@@ -99,6 +103,109 @@ export default function App() {
       setDocLoading(false)
     }
   }
+
+const openAi = () => setAiOpen(true)
+const closeAi = () => { if (!aiLoading) setAiOpen(false) }
+
+// Mapea TypeMapper → texto del atributo en el UML
+const JAVA_TO_LABEL = {
+  LONG: 'Long', INT: 'Int', BOOLEAN: 'Boolean', DECIMAL: 'BigDecimal',
+  LOCAL_DATE: 'LocalDate', LOCAL_DATE_TIME: 'LocalDateTime', STRING: 'String'
+}
+
+function specToGraph(spec) {
+  const cells = []
+  const idByName = new Map()
+  const classes = spec.entities || []
+
+  // posiciones en grilla
+  const stepX = 280, stepY = 180
+  let row = 0, col = 0
+
+  for (const e of classes) {
+    const id = crypto.randomUUID()
+    idByName.set(e.name, id)
+
+    const attrs = (e.attributes || []).map(a => {
+      const t = JAVA_TO_LABEL[a.type] || 'String'
+      const sign = a.pk ? '+' : '+'
+      return `${sign} ${a.name}: ${t}${a.generated ? '' : ''}`
+    })
+
+    cells.push({
+      type: 'uml.Class',
+      id,
+      name: e.name,
+      attributes: attrs,
+      methods: [],
+      position: { x: 80 + col*stepX, y: 80 + row*stepY },
+      size: { width: 220, height: 120 },
+      z: 1,
+      attrs: {} // Joint rellena los textos
+    })
+
+    col++
+    if (col >= 3) { col = 0; row++ }
+  }
+
+  for (const r of (spec.relations || [])) {
+    const sId = idByName.get(r.source)
+    const tId = idByName.get(r.target)
+    if (!sId || !tId) continue
+
+    let type
+    switch (r.type) {
+      case 'association': type = 'uml.Association'; break
+      case 'aggregation': type = 'uml.Aggregation'; break
+      case 'composition': type = 'uml.Composition'; break
+      case 'generalization': type = 'uml.Generalization'; break
+      default: continue
+    }
+
+    const labels = []
+    if (type === 'uml.Association' || type === 'uml.Aggregation' || type === 'uml.Composition') {
+      const m0 = r.multSource || '1'
+      const m1 = r.multTarget || '0..*'
+      labels.push({
+        position: { distance: 35, offset: -10 },
+        attrs: { text: { text: m0 }, rect: { fill: 'white' } }
+      })
+      labels.push({
+        position: { distance: -35, offset: 10 },
+        attrs: { text: { text: m1 }, rect: { fill: 'white' } }
+      })
+    }
+
+    cells.push({
+      type, id: crypto.randomUUID(), source: { id: sId }, target: { id: tId }, labels, z: 3, attrs: {}
+    })
+  }
+
+  return { cells }
+}
+
+const handleAiGenerate = async () => {
+  try {
+    setAiLoading(true)
+    const res = await fetch('/api/ai/diagram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: aiPrompt })
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const spec = await res.json()
+
+    const graph = specToGraph(spec)
+    canvasRef.current?.loadFromJSON?.(graph)
+    setAiOpen(false)
+    setAiPrompt('')
+  } catch (e) {
+    console.error(e)
+    alert('No se pudo generar el diagrama con IA.')
+  } finally {
+    setAiLoading(false)
+  }
+}
 
   // NavBar handlers
   const handleNew = () => canvasRef.current?.clear()
@@ -239,6 +346,16 @@ export default function App() {
         onGenerateCode={handleGenerateCode}
         genLoading={genLoading}
         genDisabled={!ready}
+        onAiDiagramOpen={openAi}
+        aiLoading={aiLoading}
+      />
+      <AiDiagramModal
+        open={aiOpen}
+        value={aiPrompt}
+        onChange={setAiPrompt}
+        onCancel={closeAi}
+        onConfirm={handleAiGenerate}
+        loading={aiLoading}
       />
       <div className="workspace">
         <Sidebar

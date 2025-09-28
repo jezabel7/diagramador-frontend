@@ -9,7 +9,8 @@ export default function NavBar({ onNew,
     docDisabled,
   onGenerateCode,     // 👈
     genLoading = false, // 👈
-    genDisabled = false // 👈
+    genDisabled = false, // 👈
+    onAiDiagramOpen, aiLoading
   }) {
   const fileRef = useRef(null)
 
@@ -51,6 +52,10 @@ export default function NavBar({ onNew,
           title="Generar documentación (IA) en PDF"
         >
           {docLoading ? 'Creando PDF…' : 'Generar PDF'}
+        </button>
+
+        <button onClick={onAiDiagramOpen} title="Generar diagrama con IA" disabled={aiLoading}>
+          {aiLoading ? 'IA...' : 'Diagrama con IA'}
         </button>
 
         <input ref={fileRef} type="file" accept="application/json" onChange={onFileChange} hidden />
