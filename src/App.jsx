@@ -6,7 +6,7 @@ import { downloadJSON } from './utils/download'
 import { buildModelSpecFromGraph } from './utils/modelSpec'
 import { useGraphWs } from './ws/useGraphWs'
 import AiDiagramModal from './components/AiDiagramModal'
-
+import HelpChatWidget from './components/HelpChatWidget'
 // Utilidades de compartir (vamos a inyectar docId en el link)
 function encodeSnapshot(json) {
   return btoa(unescape(encodeURIComponent(JSON.stringify(json))))
@@ -376,6 +376,7 @@ const handleAiGenerate = async () => {
           onReady={() => setReady(true)}
         />
       </div>
+    <HelpChatWidget />
     </div>
   )
 }
