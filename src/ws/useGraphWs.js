@@ -11,7 +11,12 @@ export function useGraphWs({ docId = 'demo', onPatch }) {
   )
 
   useEffect(() => {
-    const sock = new SockJS('/ws')
+    const WS_BASE = import.meta.env.VITE_WS_BASE
+      if (!WS_BASE) {
+        console.error('Falta VITE_WS_BASE (https://tu-backend)')
+        return
+      }
+    const sock = new SockJS(`${WS_BASE}/ws`)
     const client = new Client({
       webSocketFactory: () => sock,
       reconnectDelay: 1500,
