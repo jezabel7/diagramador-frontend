@@ -6,8 +6,9 @@ export default defineConfig({
   base: '/diagramador-frontend/',
   plugins: [react()],
   define: {
-    global: 'window', // 👈 fix para sockjs-client
+    global: 'window',
   },
+  build: { outDir: 'docs' },
   server: {
     proxy: {
       '/api': { target: 'https://35.188.196.28', changeOrigin: true, secure: false },
