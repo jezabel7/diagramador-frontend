@@ -24,6 +24,7 @@ export default function App() {
   const [aiOpen, setAiOpen] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const API_BASE = import.meta.env.VITE_API_BASE || ''
 
   // docId: de la URL o generamos uno y lo fijamos en la URL
   const docId = useMemo(() => {
@@ -70,7 +71,7 @@ export default function App() {
       })
 
       // Guarda spec y obtén id
-      const resGen = await fetch('/api/generate', {
+      const resGen = await fetch(`${API_BASE}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(modelSpec),
@@ -79,7 +80,7 @@ export default function App() {
       const { id } = await resGen.json()
 
       // Pide PDF IA
-      const resPdf = await fetch('/api/ai/docs', {
+      const resPdf = await fetch(`${API_BASE}/api/ai/docs`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({ id, filename: `${modelSpec.name}-doc.pdf` }),
@@ -187,7 +188,7 @@ function specToGraph(spec) {
 const handleAiGenerate = async () => {
   try {
     setAiLoading(true)
-    const res = await fetch('/api/ai/diagram', {
+    const res = await fetch(`${API_BASE}/api/ai/diagram`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiPrompt })
@@ -248,7 +249,7 @@ const handleAiGenerate = async () => {
         version: '0.0.1',
         packageBase: 'com.jezabel.healthgen',
       })
-      const resGen = await fetch('/api/generate', {
+      const resGen = await fetch(`${API_BASE}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(modelSpec),
@@ -257,7 +258,7 @@ const handleAiGenerate = async () => {
       const { id } = await resGen.json()
       if (!id) throw new Error('El backend no devolvió un id.')
 
-      const resZip = await fetch(`/api/codegen/${id}/zip`)
+      const resZip = await fetch(`${API_BASE}/api/codegen/${id}/zip`)
       if (!resZip.ok) throw new Error(await resZip.text())
       const blob = await resZip.blob()
 
