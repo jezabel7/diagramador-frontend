@@ -4,11 +4,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   base: '/diagramador-frontend/',
-  plugins: [react()],
-  define: {
-    global: 'window',
-  },
   build: { outDir: 'docs' },
+  plugins: [react()],
+  define: { global: 'window' },
   server: {
     proxy: {
       '/api': { target: 'https://35.188.196.28', changeOrigin: true, secure: false },
