@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': { target: 'https://35.188.196.28', changeOrigin: true, secure: false },
-      '/ws':  { target: 'https://35.188.196.28', changeOrigin: true, secure: false, ws: true },
+      '/ws': { target: 'https://35.188.196.28', changeOrigin: true, secure: false, ws: true },
     },
   },
 })

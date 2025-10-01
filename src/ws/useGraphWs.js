@@ -7,15 +7,15 @@ export function useGraphWs({ docId = 'demo', onPatch }) {
   const connectedRef = useRef(false)
   const queueRef = useRef([])
   const clientIdRef = useRef(
-    (crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10)) // id de este tab
+    crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10) // id de este tab
   )
 
   useEffect(() => {
     const WS_BASE = import.meta.env.VITE_WS_BASE
-      if (!WS_BASE) {
-        console.error('Falta VITE_WS_BASE (https://tu-backend)')
-        return
-      }
+    if (!WS_BASE) {
+      console.error('Falta VITE_WS_BASE (https://tu-backend)')
+      return
+    }
     const sock = new SockJS(`${WS_BASE}/ws`)
     const client = new Client({
       webSocketFactory: () => sock,
@@ -43,38 +43,49 @@ export function useGraphWs({ docId = 'demo', onPatch }) {
           }
         }
       },
-      onStompError: f => { console.error('STOMP error', f); connectedRef.current = false },
-      onWebSocketClose: () => { connectedRef.current = false },
+      onStompError: f => {
+        console.error('STOMP error', f)
+        connectedRef.current = false
+      },
+      onWebSocketClose: () => {
+        connectedRef.current = false
+      },
     })
     client.activate()
     clientRef.current = client
-    return () => { connectedRef.current = false; client.deactivate() }
+    return () => {
+      connectedRef.current = false
+      client.deactivate()
+    }
   }, [docId, onPatch])
 
-  const sendPatch = useCallback((patch) => {
-    const payload = { ...patch, _by: clientIdRef.current } // marca el emisor
-    try {
-      const client = clientRef.current
-      if (!client || !connectedRef.current) {
-        // dedupe simple para move
-        if (payload?.t === 'move') {
-          const idx = queueRef.current.findIndex(p => p?.t === 'move' && p?.id === payload.id)
-          if (idx >= 0) queueRef.current.splice(idx, 1, payload)
-          else queueRef.current.push(payload)
-        } else {
-          queueRef.current.push(payload)
+  const sendPatch = useCallback(
+    patch => {
+      const payload = { ...patch, _by: clientIdRef.current } // marca el emisor
+      try {
+        const client = clientRef.current
+        if (!client || !connectedRef.current) {
+          // dedupe simple para move
+          if (payload?.t === 'move') {
+            const idx = queueRef.current.findIndex(p => p?.t === 'move' && p?.id === payload.id)
+            if (idx >= 0) queueRef.current.splice(idx, 1, payload)
+            else queueRef.current.push(payload)
+          } else {
+            queueRef.current.push(payload)
+          }
+          return
         }
-        return
+        client.publish({
+          destination: `/app/graph.update.${docId}`,
+          body: JSON.stringify(payload),
+        })
+      } catch {
+        // nunca lances, encola
+        queueRef.current.push(payload)
       }
-      client.publish({
-        destination: `/app/graph.update.${docId}`,
-        body: JSON.stringify(payload),
-      })
-    } catch {
-      // nunca lances, encola
-      queueRef.current.push(payload)
-    }
-  }, [docId])
+    },
+    [docId]
+  )
 
   return { sendPatch }
 }

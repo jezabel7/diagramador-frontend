@@ -25,19 +25,21 @@ export function useSpeechToText({
     rec.interimResults = interim
     rec.continuous = continuous
 
-    rec.onresult = (e) => {
+    rec.onresult = e => {
       let chunk = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         chunk += e.results[i][0].transcript
       }
       onResult?.(chunk, { final: e.results[e.results.length - 1].isFinal })
     }
-    rec.onerror = (ev) => setError(ev?.error || 'speech-error')
+    rec.onerror = ev => setError(ev?.error || 'speech-error')
     rec.onend = () => setIsListening(false)
 
     recRef.current = rec
     return () => {
-      try { rec.stop() } catch {}
+      try {
+        rec.stop()
+      } catch {}
     }
   }, [lang, interim, continuous, onResult])
 
@@ -45,11 +47,15 @@ export function useSpeechToText({
     if (!recRef.current) return
     setError(null)
     setIsListening(true)
-    try { recRef.current.start() } catch {}
+    try {
+      recRef.current.start()
+    } catch {}
   }, [])
 
   const stop = useCallback(() => {
-    try { recRef.current?.stop() } catch {}
+    try {
+      recRef.current?.stop()
+    } catch {}
   }, [])
 
   return { supported, isListening, start, stop, error }

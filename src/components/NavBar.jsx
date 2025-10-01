@@ -1,17 +1,19 @@
 import React, { useRef } from 'react'
 
-export default function NavBar({ onNew,
+export default function NavBar({
+  onNew,
   onImport,
   onExport,
   onShare,
   onGenerateDocAi,
-    docLoading,
-    docDisabled,
-  onGenerateCode,     // 👈
-    genLoading = false, // 👈
-    genDisabled = false, // 👈
-    onAiDiagramOpen, aiLoading
-  }) {
+  docLoading,
+  docDisabled,
+  onGenerateCode, // 👈
+  genLoading = false, // 👈
+  genDisabled = false, // 👈
+  onAiDiagramOpen,
+  aiLoading,
+}) {
   const fileRef = useRef(null)
 
   const onClickImport = () => fileRef.current?.click()

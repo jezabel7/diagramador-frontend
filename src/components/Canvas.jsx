@@ -16,8 +16,12 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
 
   // callbacks por ref (evita re-montajes)
   const cbRef = useRef({ onLocalPatch, onSelectionChanged })
-  useEffect(() => { cbRef.current.onLocalPatch = onLocalPatch }, [onLocalPatch])
-  useEffect(() => { cbRef.current.onSelectionChanged = onSelectionChanged }, [onSelectionChanged])
+  useEffect(() => {
+    cbRef.current.onLocalPatch = onLocalPatch
+  }, [onLocalPatch])
+  useEffect(() => {
+    cbRef.current.onSelectionChanged = onSelectionChanged
+  }, [onSelectionChanged])
 
   useEffect(() => {
     let mounted = true
@@ -71,7 +75,7 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
         const st = stateRef.current
         const model = view.model
 
-       // Modo de crear relación
+        // Modo de crear relación
         if (st.linkMode) {
           if (!st.fromElement) {
             st.fromElement = model
@@ -94,10 +98,10 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
             cbRef.current.onLocalPatch?.({
               t: 'addLink',
               id: link.id,
-              linkType: data.linkType,   // e.g. 'uml.Association' | 'custom.Dependency' | ...
+              linkType: data.linkType, // e.g. 'uml.Association' | 'custom.Dependency' | ...
               source: data.source,
               target: data.target,
-              labels: data.labels,       // solo en association
+              labels: data.labels, // solo en association
             })
           }
           st.linkMode = null
@@ -117,24 +121,28 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
         stateRef.current.selected = link
         notifySelected(cbRef.current.onSelectionChanged, stateRef.current)
       })
-    // delete linea?
-    graph.on('remove', (cell) => {
-      if (stateRef.current.mute) return
-      if (cell.isLink && cell.isLink()) {
-        cbRef.current.onLocalPatch?.({ t: 'delLink', id: cell.id })
-      }
-    })
-    graph.on('change:source change:target', (link) => {
-      if (stateRef.current.mute || !(link.isLink && link.isLink())) return
-      const s = link.get('source')?.id || null
-      const t = link.get('target')?.id || null
-      cbRef.current.onLocalPatch?.({ t: 'relink', id: link.id, source: s, target: t })
-    })
+      // delete linea?
+      graph.on('remove', cell => {
+        if (stateRef.current.mute) return
+        if (cell.isLink && cell.isLink()) {
+          cbRef.current.onLocalPatch?.({ t: 'delLink', id: cell.id })
+        }
+      })
+      graph.on('change:source change:target', link => {
+        if (stateRef.current.mute || !(link.isLink && link.isLink())) return
+        const s = link.get('source')?.id || null
+        const t = link.get('target')?.id || null
+        cbRef.current.onLocalPatch?.({ t: 'relink', id: link.id, source: s, target: t })
+      })
 
-    graph.on('change:vertices', (link) => {
-      if (stateRef.current.mute || !(link.isLink && link.isLink())) return
-      cbRef.current.onLocalPatch?.({ t: 'linkVerts', id: link.id, vertices: link.vertices() || [] })
-    })
+      graph.on('change:vertices', link => {
+        if (stateRef.current.mute || !(link.isLink && link.isLink())) return
+        cbRef.current.onLocalPatch?.({
+          t: 'linkVerts',
+          id: link.id,
+          vertices: link.vertices() || [],
+        })
+      })
 
       // Movimiento de elementos → patch 'move' (si no está mute)
       const lastMoveSentRef = new Map()
@@ -161,20 +169,26 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
       }
     })()
 
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, []) // 👈 sin deps, no re-montar
 
   // ---- Helpers ----
   function runMuted(fn) {
     stateRef.current.mute = true
-    try { fn() } finally { stateRef.current.mute = false }
+    try {
+      fn()
+    } finally {
+      stateRef.current.mute = false
+    }
   }
 
   function internalAddClass(init) {
     if (!graphRef.current) return null
     const hasUML = !!joint.shapes.uml && !!joint.shapes.uml.Class
 
-    const id = init?.id || (crypto?.randomUUID?.() || String(Date.now()))
+    const id = init?.id || crypto?.randomUUID?.() || String(Date.now())
     const name = init?.name || 'NuevaClase'
     const x = Number.isFinite(init?.x) ? init.x : 80 + Math.random() * 200
     const y = Number.isFinite(init?.y) ? init.y : 80 + Math.random() * 120
@@ -335,11 +349,11 @@ const Canvas = forwardRef(function Canvas({ onSelectionChanged, onLocalPatch, on
           if (stateRef.current.selected?.id === patch.id) cbRef.current.onSelectionChanged?.(null)
           return
         }
-      // delete link
+        // delete link
         case 'delLink': {
           const l = get(patch.id)
           if (l && l.isLink && l.isLink()) {
-            runMuted(() => l.remove())             // 👈 evita bucle: no vuelve a mandar delLink
+            runMuted(() => l.remove()) // 👈 evita bucle: no vuelve a mandar delLink
             if (stateRef.current.selected?.id === patch.id) onSelectionChanged?.(null)
           }
           return
@@ -455,10 +469,10 @@ export default Canvas
 
 // ------------ Helpers ------------
 function createLinkWithLabels(type, from, to, forcedId, labels = ['1', '0..*']) {
-const norm = String(type || '')
-  .toLowerCase()
-  .replace(/^uml\./, '')
-  .replace(/^custom\./, '')
+  const norm = String(type || '')
+    .toLowerCase()
+    .replace(/^uml\./, '')
+    .replace(/^custom\./, '')
   const s = { id: from.id }
   const t = { id: to.id }
   let link
@@ -485,32 +499,38 @@ const norm = String(type || '')
       attrs: { text: { text: labels[1] ?? '0..*' }, rect: { fill: 'white' } },
       position: { distance: -35, offset: 10 },
     })
-
   } else if (norm === 'aggregation') {
     linkType = 'uml.Aggregation'
     link = new joint.shapes.uml.Aggregation({ id: forcedId, source: s, target: t })
-
   } else if (norm === 'composition') {
     linkType = 'uml.Composition'
     link = new joint.shapes.uml.Composition({ id: forcedId, source: s, target: t })
-
   } else if (norm === 'generalization') {
     linkType = 'uml.Generalization'
     link = new joint.shapes.uml.Generalization({ id: forcedId, source: s, target: t })
-
   } else if (norm === 'dependency') {
-      linkType = 'custom.Dependency'
-      link = new joint.dia.Link({ id: forcedId, type: 'custom.Dependency', source: s, target: t })
-      link.attr({
-        '.connection': { 'stroke-dasharray': '6 4', 'stroke-width': 1.5, stroke: '#000' },
-        '.marker-target': { d: 'M 8 -4 0 0 8 4', fill: 'none', stroke: '#000' }
-      })
-
-    } else if (norm === 'realization') {
-      linkType = 'custom.Realization'
-      link = new joint.shapes.standard.Link({ id: forcedId, type: 'custom.Realization', source: s, target: t })
-      link.attr({ line: { strokeDasharray: '6 4', strokeWidth: 1.5, stroke: '#000',
-        targetMarker: { type: 'path', d: 'M 12 0 0 -7 0 7 z', fill: 'white', stroke: '#000' } } })
+    linkType = 'custom.Dependency'
+    link = new joint.dia.Link({ id: forcedId, type: 'custom.Dependency', source: s, target: t })
+    link.attr({
+      '.connection': { 'stroke-dasharray': '6 4', 'stroke-width': 1.5, stroke: '#000' },
+      '.marker-target': { d: 'M 8 -4 0 0 8 4', fill: 'none', stroke: '#000' },
+    })
+  } else if (norm === 'realization') {
+    linkType = 'custom.Realization'
+    link = new joint.shapes.standard.Link({
+      id: forcedId,
+      type: 'custom.Realization',
+      source: s,
+      target: t,
+    })
+    link.attr({
+      line: {
+        strokeDasharray: '6 4',
+        strokeWidth: 1.5,
+        stroke: '#000',
+        targetMarker: { type: 'path', d: 'M 12 0 0 -7 0 7 z', fill: 'white', stroke: '#000' },
+      },
+    })
   } else {
     return { link: null, data: null }
   }
@@ -518,17 +538,20 @@ const norm = String(type || '')
   return {
     link,
     data: {
-      linkType,          // usarás esto en el patch
+      linkType, // usarás esto en el patch
       source: from.id,
       target: to.id,
-      labels: (linkType === 'uml.Association') ? [labels[0] ?? '1', labels[1] ?? '0..*'] : undefined,
+      labels: linkType === 'uml.Association' ? [labels[0] ?? '1', labels[1] ?? '0..*'] : undefined,
     },
   }
 }
 
 function notifySelected(onSelectionChanged, st) {
   const el = st.selected
-  if (!el) { onSelectionChanged?.(null); return }
+  if (!el) {
+    onSelectionChanged?.(null)
+    return
+  }
 
   if (el.isLink && el.isLink()) {
     const type = el.get('type')

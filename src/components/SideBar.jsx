@@ -51,7 +51,7 @@ export default function Sidebar({
           <button onClick={() => onSetRelation('aggregation')}>Agregación</button>
           <button onClick={() => onSetRelation('composition')}>Composición</button>
           <button onClick={() => onSetRelation('generalization')}>Generalización</button>
-         </div>
+        </div>
         <small>Selecciona tipo y luego clic en origen → destino</small>
       </div>
 

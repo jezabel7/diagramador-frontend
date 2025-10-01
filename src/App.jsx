@@ -12,7 +12,11 @@ function encodeSnapshot(json) {
   return btoa(unescape(encodeURIComponent(JSON.stringify(json))))
 }
 function decodeSnapshot(encoded) {
-  try { return JSON.parse(decodeURIComponent(escape(atob(encoded)))) } catch { return null }
+  try {
+    return JSON.parse(decodeURIComponent(escape(atob(encoded))))
+  } catch {
+    return null
+  }
 }
 
 export default function App() {
@@ -62,7 +66,10 @@ export default function App() {
 
       // Igual que codegen: construye el modelSpec desde el canvas
       const graphJSON = canvasRef.current?.getGraphJSON?.()
-      if (!graphJSON?.cells?.length) { alert('No hay diagrama.'); return }
+      if (!graphJSON?.cells?.length) {
+        alert('No hay diagrama.')
+        return
+      }
 
       const modelSpec = buildModelSpecFromGraph(graphJSON, {
         name: 'diagramador-generated',
@@ -73,7 +80,7 @@ export default function App() {
       // Guarda spec y obtén id
       const resGen = await fetch(`${API_BASE}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(modelSpec),
       })
       if (!resGen.ok) throw new Error(await resGen.text())
@@ -82,7 +89,7 @@ export default function App() {
       // Pide PDF IA
       const resPdf = await fetch(`${API_BASE}/api/ai/docs`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, filename: `${modelSpec.name}-doc.pdf` }),
       })
       if (!resPdf.ok) throw new Error(await resPdf.text())
@@ -105,108 +112,135 @@ export default function App() {
     }
   }
 
-const openAi = () => setAiOpen(true)
-const closeAi = () => { if (!aiLoading) setAiOpen(false) }
-
-// Mapea TypeMapper → texto del atributo en el UML
-const JAVA_TO_LABEL = {
-  LONG: 'Long', INT: 'Int', BOOLEAN: 'Boolean', DECIMAL: 'BigDecimal',
-  LOCAL_DATE: 'LocalDate', LOCAL_DATE_TIME: 'LocalDateTime', STRING: 'String'
-}
-
-function specToGraph(spec) {
-  const cells = []
-  const idByName = new Map()
-  const classes = spec.entities || []
-
-  // posiciones en grilla
-  const stepX = 280, stepY = 180
-  let row = 0, col = 0
-
-  for (const e of classes) {
-    const id = crypto.randomUUID()
-    idByName.set(e.name, id)
-
-    const attrs = (e.attributes || []).map(a => {
-      const t = JAVA_TO_LABEL[a.type] || 'String'
-      const sign = a.pk ? '+' : '+'
-      return `${sign} ${a.name}: ${t}${a.generated ? '' : ''}`
-    })
-
-    cells.push({
-      type: 'uml.Class',
-      id,
-      name: e.name,
-      attributes: attrs,
-      methods: [],
-      position: { x: 80 + col*stepX, y: 80 + row*stepY },
-      size: { width: 220, height: 120 },
-      z: 1,
-      attrs: {} // Joint rellena los textos
-    })
-
-    col++
-    if (col >= 3) { col = 0; row++ }
+  const openAi = () => setAiOpen(true)
+  const closeAi = () => {
+    if (!aiLoading) setAiOpen(false)
   }
 
-  for (const r of (spec.relations || [])) {
-    const sId = idByName.get(r.source)
-    const tId = idByName.get(r.target)
-    if (!sId || !tId) continue
+  // Mapea TypeMapper → texto del atributo en el UML
+  const JAVA_TO_LABEL = {
+    LONG: 'Long',
+    INT: 'Int',
+    BOOLEAN: 'Boolean',
+    DECIMAL: 'BigDecimal',
+    LOCAL_DATE: 'LocalDate',
+    LOCAL_DATE_TIME: 'LocalDateTime',
+    STRING: 'String',
+  }
 
-    let type
-    switch (r.type) {
-      case 'association': type = 'uml.Association'; break
-      case 'aggregation': type = 'uml.Aggregation'; break
-      case 'composition': type = 'uml.Composition'; break
-      case 'generalization': type = 'uml.Generalization'; break
-      default: continue
+  function specToGraph(spec) {
+    const cells = []
+    const idByName = new Map()
+    const classes = spec.entities || []
+
+    // posiciones en grilla
+    const stepX = 280,
+      stepY = 180
+    let row = 0,
+      col = 0
+
+    for (const e of classes) {
+      const id = crypto.randomUUID()
+      idByName.set(e.name, id)
+
+      const attrs = (e.attributes || []).map(a => {
+        const t = JAVA_TO_LABEL[a.type] || 'String'
+        const sign = a.pk ? '+' : '+'
+        return `${sign} ${a.name}: ${t}${a.generated ? '' : ''}`
+      })
+
+      cells.push({
+        type: 'uml.Class',
+        id,
+        name: e.name,
+        attributes: attrs,
+        methods: [],
+        position: { x: 80 + col * stepX, y: 80 + row * stepY },
+        size: { width: 220, height: 120 },
+        z: 1,
+        attrs: {}, // Joint rellena los textos
+      })
+
+      col++
+      if (col >= 3) {
+        col = 0
+        row++
+      }
     }
 
-    const labels = []
-    if (type === 'uml.Association' || type === 'uml.Aggregation' || type === 'uml.Composition') {
-      const m0 = r.multSource || '1'
-      const m1 = r.multTarget || '0..*'
-      labels.push({
-        position: { distance: 35, offset: -10 },
-        attrs: { text: { text: m0 }, rect: { fill: 'white' } }
-      })
-      labels.push({
-        position: { distance: -35, offset: 10 },
-        attrs: { text: { text: m1 }, rect: { fill: 'white' } }
+    for (const r of spec.relations || []) {
+      const sId = idByName.get(r.source)
+      const tId = idByName.get(r.target)
+      if (!sId || !tId) continue
+
+      let type
+      switch (r.type) {
+        case 'association':
+          type = 'uml.Association'
+          break
+        case 'aggregation':
+          type = 'uml.Aggregation'
+          break
+        case 'composition':
+          type = 'uml.Composition'
+          break
+        case 'generalization':
+          type = 'uml.Generalization'
+          break
+        default:
+          continue
+      }
+
+      const labels = []
+      if (type === 'uml.Association' || type === 'uml.Aggregation' || type === 'uml.Composition') {
+        const m0 = r.multSource || '1'
+        const m1 = r.multTarget || '0..*'
+        labels.push({
+          position: { distance: 35, offset: -10 },
+          attrs: { text: { text: m0 }, rect: { fill: 'white' } },
+        })
+        labels.push({
+          position: { distance: -35, offset: 10 },
+          attrs: { text: { text: m1 }, rect: { fill: 'white' } },
+        })
+      }
+
+      cells.push({
+        type,
+        id: crypto.randomUUID(),
+        source: { id: sId },
+        target: { id: tId },
+        labels,
+        z: 3,
+        attrs: {},
       })
     }
 
-    cells.push({
-      type, id: crypto.randomUUID(), source: { id: sId }, target: { id: tId }, labels, z: 3, attrs: {}
-    })
+    return { cells }
   }
 
-  return { cells }
-}
+  const handleAiGenerate = async () => {
+    try {
+      setAiLoading(true)
+      const res = await fetch(`${API_BASE}/api/ai/diagram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const spec = await res.json()
 
-const handleAiGenerate = async () => {
-  try {
-    setAiLoading(true)
-    const res = await fetch(`${API_BASE}/api/ai/diagram`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: aiPrompt })
-    })
-    if (!res.ok) throw new Error(await res.text())
-    const spec = await res.json()
-
-    const graph = specToGraph(spec)
-    canvasRef.current?.loadFromJSON?.(graph)
-    setAiOpen(false)
-    setAiPrompt('')
-  } catch (e) {
-    console.error(e)
-    alert('No se pudo generar el diagrama con IA.')
-  } finally {
-    setAiLoading(false)
+      const graph = specToGraph(spec)
+      canvasRef.current?.loadFromJSON?.(graph)
+      setAiOpen(false)
+      setAiPrompt('')
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo generar el diagrama con IA.')
+    } finally {
+      setAiLoading(false)
+    }
   }
-}
 
   // NavBar handlers
   const handleNew = () => canvasRef.current?.clear()
@@ -373,11 +407,11 @@ const handleAiGenerate = async () => {
         <Canvas
           ref={canvasRef}
           onSelectionChanged={setSelectedMeta}
-          onLocalPatch={sendPatch}   // 👈 Canvas emite move/addLink/setMult
+          onLocalPatch={sendPatch} // 👈 Canvas emite move/addLink/setMult
           onReady={() => setReady(true)}
         />
       </div>
-    <HelpChatWidget />
+      <HelpChatWidget />
     </div>
   )
 }
